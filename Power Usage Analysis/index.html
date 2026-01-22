@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power Usage Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-900 to-gray-800 min-h-screen">
+    <div id="app" class="p-8">
+        <!-- Upload Screen -->
+        <div id="uploadScreen" class="flex items-center justify-center min-h-screen">
+            <div class="max-w-2xl w-full">
+                <div class="bg-gray-800 rounded-lg shadow-2xl p-8 border border-gray-700">
+                    <h1 class="text-3xl font-bold text-white mb-4 text-center">
+                        Power Usage Analysis
+                    </h1>
+                    <p class="text-gray-300 mb-6 text-center">
+                        Upload your power usage CSV file to analyze minimum, maximum, average, and running average power consumption.
+                    </p>
+                    <label class="block">
+                        <input
+                            type="file"
+                            id="fileInput"
+                            accept=".csv"
+                            class="block w-full text-sm text-gray-400
+                                file:mr-4 file:py-2 file:px-4
+                                file:rounded-lg file:border-0
+                                file:text-sm file:font-semibold
+                                file:bg-blue-600 file:text-white
+                                hover:file:bg-blue-700
+                                cursor-pointer"
+                        />
+                    </label>
+                    <p class="text-sm text-gray-400 mt-4">
+                        Expected CSV format: columns for entity_id, state (power values), and last_changed
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="resultsScreen" class="hidden">
+            <div class="max-w-6xl mx-auto">
+                <div class="flex justify-between items-center mb-8">
+                    <h1 class="text-4xl font-bold text-white">
+                        Power Usage Analysis
+                    </h1>
+                    <label class="cursor-pointer">
+                        <span class="inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition">
+                            Upload New File
+                        </span>
+                        <input
+                            type="file"
+                            id="fileInputNew"
+                            accept=".csv"
+                            class="hidden"
+                        />
+                    </label>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-gray-800 rounded-lg shadow-2xl p-6 border border-gray-700">
+                        <div class="text-sm text-gray-400 mb-2">Minimum Power</div>
+                        <div class="text-3xl font-bold text-blue-400" id="minPower">--</div>
+                    </div>
+                    
+                    <div class="bg-gray-800 rounded-lg shadow-2xl p-6 border border-gray-700">
+                        <div class="text-sm text-gray-400 mb-2">Maximum Power</div>
+                        <div class="text-3xl font-bold text-red-400" id="maxPower">--</div>
+                    </div>
+                    
+                    <div class="bg-gray-800 rounded-lg shadow-2xl p-6 border border-gray-700">
+                        <div class="text-sm text-gray-400 mb-2">Overall Average</div>
+                        <div class="text-3xl font-bold text-purple-400" id="avgPower">--</div>
+                    </div>
+                    
+                    <div class="bg-gray-800 rounded-lg shadow-2xl p-6 border-2 border-green-500">
+                        <div class="text-sm text-gray-400 mb-2">Running Average</div>
+                        <div class="text-sm text-gray-500 mb-1">(≥20W only)</div>
+                        <div class="text-3xl font-bold text-green-400" id="runningAvg">--</div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg shadow-2xl p-6 mb-8 border border-gray-700">
+                    <h2 class="text-xl font-semibold text-gray-200 mb-4">Power Usage Comparison</h2>
+                    <canvas id="powerChart" height="100"></canvas>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg shadow-2xl p-6 border border-gray-700">
+                    <h2 class="text-xl font-semibold text-gray-200 mb-4">Data Summary</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <div class="text-sm text-gray-400">Total Readings</div>
+                            <div class="text-2xl font-semibold text-gray-200" id="totalReadings">--</div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-400">Running Readings (≥20W)</div>
+                            <div class="text-2xl font-semibold text-green-400" id="runningReadings">--</div>
+                        </div>
+                        <div>
+                            <div class="text-sm text-gray-400">Standby Readings (&lt;20W)</div>
+                            <div class="text-2xl font-semibold text-gray-500" id="standbyReadings">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Screen -->
+        <div id="loadingScreen" class="hidden flex items-center justify-center min-h-screen">
+            <div class="text-lg text-gray-300">Processing file...</div>
+        </div>
+
+        <!-- Error Screen -->
+        <div id="errorScreen" class="hidden min-h-screen flex items-center justify-center">
+            <div class="max-w-2xl mx-auto">
+                <div class="bg-gray-800 rounded-lg shadow-lg p-8 border border-gray-700">
+                    <div class="text-lg text-red-400 mb-4" id="errorMessage">An error occurred</div>
+                    <label class="block">
+                        <input
+                            type="file"
+                            id="fileInputError"
+                            accept=".csv"
+                            class="block w-full text-sm text-gray-400
+                                file:mr-4 file:py-2 file:px-4
+                                file:rounded-lg file:border-0
+                                file:text-sm file:font-semibold
+                                file:bg-blue-600 file:text-white
+                                hover:file:bg-blue-700
+                                cursor-pointer"
+                        />
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let chart = null;
+
+        function showScreen(screenId) {
+            ['uploadScreen', 'resultsScreen', 'loadingScreen', 'errorScreen'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(screenId).classList.remove('hidden');
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            showScreen('errorScreen');
+        }
+
+        function processFile(file) {
+            if (!file) return;
+
+            showScreen('loadingScreen');
+
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    try {
+                        const powerValues = results.data
+                            .map(row => row.state)
+                            .filter(val => typeof val === 'number' && !isNaN(val));
+                        
+                        if (powerValues.length === 0) {
+                            showError('No valid power readings found');
+                            return;
+                        }
+
+                        // Find minimum (excluding zeros)
+                        const sortedValues = [...powerValues].sort((a, b) => a - b);
+                        const nonZeroValues = sortedValues.filter(val => val > 0);
+                        const min = nonZeroValues.length > 0 ? nonZeroValues[0] : sortedValues[0];
+                        
+                        const max = Math.max(...powerValues);
+                        const avg = powerValues.reduce((sum, val) => sum + val, 0) / powerValues.length;
+                        
+                        const runningValues = powerValues.filter(val => val >= 20);
+                        const runningAvg = runningValues.length > 0 
+                            ? runningValues.reduce((sum, val) => sum + val, 0) / runningValues.length 
+                            : 0;
+
+                        // Update stats
+                        document.getElementById('minPower').textContent = min.toFixed(2) + 'W';
+                        document.getElementById('maxPower').textContent = max.toFixed(2) + 'W';
+                        document.getElementById('avgPower').textContent = avg.toFixed(2) + 'W';
+                        document.getElementById('runningAvg').textContent = runningAvg.toFixed(2) + 'W';
+                        document.getElementById('totalReadings').textContent = powerValues.length.toLocaleString();
+                        document.getElementById('runningReadings').textContent = runningValues.length.toLocaleString();
+                        document.getElementById('standbyReadings').textContent = (powerValues.length - runningValues.length).toLocaleString();
+
+                        // Create chart
+                        createChart(min, max, avg, runningAvg);
+                        
+                        showScreen('resultsScreen');
+                    } catch (error) {
+                        showError('Error processing file: ' + error.message);
+                    }
+                },
+                error: function(error) {
+                    showError('Error parsing CSV: ' + error.message);
+                }
+            });
+        }
+
+        function createChart(min, max, avg, runningAvg) {
+            const ctx = document.getElementById('powerChart');
+            
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Min Power', 'Overall Average', 'Running Average', 'Max Power'],
+                    datasets: [{
+                        label: 'Power (W)',
+                        data: [min, avg, runningAvg, max],
+                        backgroundColor: [
+                            'rgba(96, 165, 250, 0.8)',
+                            'rgba(167, 139, 250, 0.8)',
+                            'rgba(52, 211, 153, 0.8)',
+                            'rgba(248, 113, 113, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgb(96, 165, 250)',
+                            'rgb(167, 139, 250)',
+                            'rgb(52, 211, 153)',
+                            'rgb(248, 113, 113)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(31, 41, 55, 0.9)',
+                            titleColor: '#f3f4f6',
+                            bodyColor: '#f3f4f6',
+                            borderColor: '#374151',
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: '#9ca3af'
+                            },
+                            grid: {
+                                color: '#374151'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#9ca3af'
+                            },
+                            grid: {
+                                color: '#374151'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Event listeners
+        document.getElementById('fileInput').addEventListener('change', (e) => processFile(e.target.files[0]));
+        document.getElementById('fileInputNew').addEventListener('change', (e) => processFile(e.target.files[0]));
+        document.getElementById('fileInputError').addEventListener('change', (e) => processFile(e.target.files[0]));
+    </script>
+</body>
+</html>
