@@ -18,9 +18,8 @@
                         Power Usage Analysis
                     </h1>
                     <p class="text-gray-300 mb-6 text-center">
-                        Upload your power usage CSV file to analyze minimum, maximum, average, and running average power consumption.<br>
-                        Default format from Home Assistant Watt, History view.<br>
-                        Example: entity_id,state,last_changed <br>
+                        Upload your power usage CSV file to analyze:<br>
+                        Minimum, Maximum, Average, and running average power consumption.<br>
                     </p>
                     <label class="block">
                         <input
@@ -37,7 +36,9 @@
                         />
                     </label>
                     <p class="text-sm text-gray-400 mt-4">
-                        Expected CSV format: columns for entity_id, state (power values), and last_changed
+                        Expected CSV format: columns for entity_id, state (power values), and last_changed.<br>
+                        Default downloaded history from Home Assistant.<br>
+                        Made for Watts, but I would assume any numbered value would work just fine.<br>
                     </p>
                 </div>
             </div>
