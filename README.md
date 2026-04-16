@@ -6,4 +6,4 @@ For the best use downloade the html, and add your own data for Filaments, Printe
 Save the HTML with the save button, and the data will be there for next time.
 
 <br><br> IronPaw Tokens:  
-https://za-x-az.github.io/3D-printing-stuff/content/Print-Price-Calculator/PCC.html
+https://za-x-az.github.io/https://za-x-az.github.io/3D-printing-stuff/Print%20Price%20Calculator/PPC.html
