@@ -22,7 +22,7 @@ Hosting it here on GitHub enables others to add or remove features! 🚀<br>
 <br>
 <br>
 
-##Avage Power Usage While Printing <br>
+## Average Power Usage While Printing <br>
 If you have data from a smart plug, you can use this to get an average active print power use. <br>
 It filters out low power draw (like idle power) to give you an accurate average of what the printer actually pulls while printing. ⚡<br>
 https://za-x-az.github.io/3D-printing-stuff/Print%20Price%20Calculator/Power%20Usage%20Analysis/PUA.html
