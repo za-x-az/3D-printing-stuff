@@ -1,6 +1,5 @@
-# 3D-printing-stuff
-Different useful HTML tools to use for 3D printing
-<br>
+# 3D Printing Toolbox 🛠️<br>
+A collection of useful, browser-based HTML tools designed to make 3D printing a bit easier and more cost-effective.<br><br>
 <br>
 <br>
 ## Yet another calculator for setting prices on your prints 🖨️<br>
