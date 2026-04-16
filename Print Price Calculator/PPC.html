@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Print Price Calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #141720;
+    --surface2: #1c2030;
+    --surface3: #242840;
+    --border: #2a2f45;
+    --border2: #363d5a;
+    --accent: #00d4ff;
+    --accent2: #7c3aed;
+    --accent3: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --green: #10b981;
+    --yellow: #f59e0b;
+    --blue: #3b82f6;
+    --radius: 10px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  /* ───── LAYOUT ───── */
+  .app { display: flex; height: 100vh; overflow: hidden; }
+
+  .sidebar {
+    width: 220px;
+    min-width: 220px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* ───── SIDEBAR ───── */
+  .logo { padding: 20px 16px 16px; border-bottom: 1px solid var(--border); }
+  .logo h1 { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 800; letter-spacing: 0.05em; color: var(--accent); text-transform: uppercase; }
+  .logo span { color: var(--text2); font-size: 11px; display: block; margin-top: 2px; }
+
+  .nav-section { padding: 12px 0; }
+  .nav-label { padding: 4px 16px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); }
+  .nav-btn { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 16px; background: none; border: none; color: var(--text2); font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer; text-align: left; transition: all 0.15s; border-left: 2px solid transparent; }
+  .nav-btn:hover { background: var(--surface2); color: var(--text); }
+  .nav-btn.active { background: var(--surface2); color: var(--accent); border-left-color: var(--accent); }
+  .nav-btn .ico { width: 16px; text-align: center; font-size: 14px; }
+
+  .sidebar-actions { margin-top: auto; padding: 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+
+  /* ───── BUTTONS ───── */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 16px; border: none; border-radius: var(--radius); font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; text-transform: uppercase; letter-spacing: 0.05em; }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { background: #00bbdd; }
+  .btn-success { background: var(--green); color: #000; }
+  .btn-success:hover { background: #0da271; }
+  .btn-warn { background: var(--warn); color: #000; }
+  .btn-warn:hover { background: #d97706; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-ghost { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--surface3); color: var(--text); }
+  .btn-sm { padding: 5px 10px; font-size: 11px; }
+  .btn-full { width: 100%; }
+
+  /* ───── PAGE VIEWS ───── */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ───── PAGE HEADER ───── */
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .page-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--text); }
+  .page-title span { color: var(--accent); }
+
+  /* ───── CARDS ───── */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .card-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text2); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .card-title .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .card-title .dot.green { background: var(--green); }
+  .card-title .dot.warn { background: var(--warn); }
+  .card-title .dot.purple { background: var(--accent2); }
+
+  /* ───── GRID ───── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+  /* ───── FORM ELEMENTS ───── */
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text3); }
+  .field input, .field select, .field textarea { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 13px; padding: 8px 10px; transition: border-color 0.15s; outline: none; width: 100%; }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field select option { background: var(--surface2); }
+  .field.highlight input, .field.highlight select { background: #1a2a1a; border-color: var(--green); color: #4ade80; }
+  .field.input-yellow input { background: #2a1f0a; border-color: var(--warn); color: var(--warn); }
+  .field.readonly input { background: var(--surface3); color: var(--text2); cursor: default; }
+
+  /* ───── CALC GRID ───── */
+  .calc-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+
+  /* ───── BREAKDOWN TABLE ───── */
+  .breakdown-table { width: 100%; border-collapse: collapse; }
+  .breakdown-table th { text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); border-bottom: 1px solid var(--border); }
+  .breakdown-table th:not(:first-child) { text-align: right; }
+  .breakdown-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text2); font-size: 12px; }
+  .breakdown-table td:not(:first-child) { text-align: right; }
+  .breakdown-table tr:last-child td { border-bottom: none; }
+  .breakdown-table .total-row td { color: var(--text); font-weight: 700; border-top: 2px solid var(--border2); padding-top: 12px; }
+  .breakdown-table .label-col { color: var(--text); }
+  .value-accent { color: var(--accent) !important; }
+  .value-green { color: var(--green) !important; }
+  .value-warn { color: var(--warn) !important; }
+  .value-purple { color: #a78bfa !important; }
+
+   /* ───── DB TABLES ───── */
+  .db-table { width: 100%; border-collapse: collapse; }
+  .db-table th { text-align: left; padding: 10px 12px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text3); background: var(--surface3); border-bottom: 1px solid var(--border2); }
+  .db-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text2); font-size: 12px; vertical-align: middle; }
+  .db-table tr:hover td { background: var(--surface2); }
+  .db-table tr:last-child td { border-bottom: none; }
+
+  /* ───── BADGE ───── */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background: var(--surface3); color: var(--text2); }
+  .badge.green { background: #1a2a1a; color: var(--green); }
+  .badge.blue { background: #1e2a3a; color: var(--blue); }
+  .badge.red { background: #2a1a1a; color: #f87171; }
+  .badge.yellow { background: #2a1e0a; color: var(--warn); }
+  .badge.gray { background: var(--surface3); color: var(--text2); }
+
+  /* ───── ADD FORM ───── */
+  .add-form { background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; display: none; }
+  .add-form.open, .add-form.always-open { display: block; }
+  .form-row { display: grid; gap: 12px; margin-bottom: 12px; }
+  .form-row.cols-2 { grid-template-columns: 1fr 1fr; }
+  .form-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .form-row.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+  /* ───── TOAST ───── */
+  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--green); color: #000; padding: 10px 20px; border-radius: 8px; font-weight: 700; font-size: 12px; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 9999; }
+  #toast.show { opacity: 1; }
+
+  .notice { background: #1a1f2e; border: 1px solid var(--border2); border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 14px; font-size: 11px; color: var(--text2); line-height: 1.5; }
+  .section-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 16px; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <div class="sidebar">
+    <div class="logo">
+      <h1>PrintCalc</h1>
+      <span>3D Print Pricer v2.0</span>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Tools</div>
+      <button class="nav-btn active" onclick="showView('calculator')"><span class="ico">🧮</span> Calculator</button>
+      <button class="nav-btn" onclick="showView('filaments')"><span class="ico">🧵</span> Filaments</button>
+      <button class="nav-btn" onclick="showView('printers')"><span class="ico">🖨️</span> Printers</button>
+      <button class="nav-btn" onclick="showView('hardware')"><span class="ico">🔩</span> Hardware</button>
+    </div>
+    <div class="sidebar-actions">
+      <button class="btn btn-primary btn-full" onclick="saveHTML()">💾 Save File</button>
+      <button class="btn btn-ghost btn-full" onclick="showView('calculator')">🔄 Reset Calc</button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <div id="view-calculator" class="view active">
+      <div class="page-header">
+        <div class="page-title">Price <span>Calculator</span></div>
+      </div>
+      
+      <div class="calc-layout">
+        <div style="display:flex;flex-direction:column;gap:14px;">
+
+          <div class="card">
+            <div class="card-title"><span class="dot green"></span> Equipment & Material</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div class="field highlight">
+                <label>Filament Type</label>
+                <select id="c-fil-type" onchange="onFilTypeChange()"><option value="">-- select type --</option></select>
+              </div>
+              <div class="field highlight">
+                <label>Filament Brand</label>
+                <select id="c-fil-brand" onchange="onFilBrandChange()"><option value="">-- select brand --</option></select>
+              </div>
+              <div class="field highlight">
+                <label>Select Printer</label>
+                <select id="c-printer" onchange="onPrinterChange()"><option value="">-- select printer --</option></select>
+              </div>
+              <div class="grid-2">
+                <div class="field readonly">
+                  <label>Price / kg (DKK)</label>
+                  <input id="c-fil-price" type="number" readonly>
+                </div>
+                <div class="field">
+                  <label>Markup %</label>
+                  <input id="c-markup" type="number" value="10" min="0" oninput="calculate()">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span class="dot warn"></span> Job Details</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div class="grid-3">
+                <div class="field input-yellow">
+                  <label>Filament (g)</label>
+                  <input id="c-grams" type="number" value="100" min="0" oninput="calculate()">
+                </div>
+                <div class="field input-yellow">
+                  <label>Hours</label>
+                  <input id="c-hours" type="number" value="1" min="0" oninput="calculate()">
+                </div>
+                <div class="field input-yellow">
+                  <label>Minutes</label>
+                  <input id="c-mins" type="number" value="0" min="0" max="59" oninput="calculate()">
+                </div>
+              </div>
+              <div class="field input-yellow">
+                <label>Items in Job</label>
+                <input id="c-items" type="number" value="1" min="1" oninput="calculate()">
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span class="dot purple"></span> Financial Settings</div>
+            <div class="grid-2">
+              <div class="field">
+                <label>Profit Margin %</label>
+                <input id="c-profit" type="number" value="25" min="0" oninput="calculate()">
+              </div>
+              <div class="field">
+                <label>VAT %</label>
+                <input id="c-vat" type="number" value="25" min="0" oninput="calculate()">
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+              <input type="checkbox" id="c-vat-on" checked onchange="calculate()" style="width:auto;accent-color:var(--accent);">
+              <label for="c-vat-on" style="font-size:12px;color:var(--text2);cursor:pointer;text-transform:none;">Include VAT in sale price</label>
+            </div>
+          </div>
+
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px;">
+
+          <div class="card">
+            <div class="card-title"><span class="dot"></span> Cost Breakdown (Full Job)</div>
+            <table class="breakdown-table">
+              <thead>
+                <tr>
+                  <th>Line Item</th>
+                  <th>Unit</th>
+                  <th>Total Job</th>
+                  <th>Per Item</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="label-col">Filament Cost</td>
+                  <td id="b-fil-unit" class="value-accent">—</td>
+                  <td id="b-fil-job" class="value-accent">—</td>
+                  <td id="b-fil-item" class="value-accent">—</td>
+                </tr>
+                <tr>
+                  <td class="label-col">Filament Markup</td>
+                  <td>—</td>
+                  <td id="b-markup-job" class="value-accent">—</td>
+                  <td id="b-markup-item" class="value-accent">—</td>
+                </tr>
+                <tr>
+                  <td class="label-col">Power Cost</td>
+                  <td id="b-power-unit">—</td>
+                  <td id="b-power-job">—</td>
+                  <td id="b-power-item">—</td>
+                </tr>
+                <tr>
+                  <td class="label-col">Printer Running Cost</td>
+                  <td>—</td>
+                  <td id="b-running-job">—</td>
+                  <td id="b-running-item">—</td>
+                </tr>
+                <tr>
+                  <td class="label-col">Setup Fee</td>
+                  <td>—</td>
+                  <td id="b-setup-job">—</td>
+                  <td id="b-setup-item">—</td>
+                </tr>
+                <tr>
+                  <td class="label-col">Hardware</td>
+                  <td>per item</td>
+                  <td id="b-hw-job" class="value-purple">—</td>
+                  <td id="b-hw-item" class="value-purple">—</td>
+                </tr>
+                <tr class="total-row">
+                  <td class="label-col" colspan="2"><strong>Total Cost</strong></td>
+                  <td id="b-total-job"><strong>—</strong></td>
+                  <td id="b-total-item"><strong>—</strong></td>
+                </tr>
+                <tr>
+                  <td class="label-col">Profit (<span id="b-profit-pct">25</span>%)</td>
+                  <td>—</td>
+                  <td id="b-profit-job" class="value-green">—</td>
+                  <td id="b-profit-item" class="value-green">—</td>
+                </tr>
+                <tr>
+                  <td class="label-col">Sale Price (ex. VAT)</td>
+                  <td>—</td>
+                  <td id="b-exvat-job" class="value-green">—</td>
+                  <td id="b-exvat-item" class="value-green">—</td>
+                </tr>
+                <tr>
+                  <td class="label-col">VAT (<span id="b-vat-pct">25</span>%)</td>
+                  <td>—</td>
+                  <td id="b-vat-job" class="value-warn">—</td>
+                  <td id="b-vat-item" class="value-warn">—</td>
+                </tr>
+                <tr class="total-row">
+                  <td class="label-col" colspan="2"><strong>Sale Price (inc. VAT)</strong></td>
+                  <td id="b-incvat-job" class="value-warn"><strong>—</strong></td>
+                  <td id="b-incvat-item" class="value-warn"><strong>—</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span class="dot purple"></span> Hardware Used in This Job</div>
+            <div id="hw-selector" style="display:flex;flex-direction:column;gap:8px;"></div>
+            <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:11px;color:var(--text3);">Hardware total cost per item × items = job total</span>
+              <span style="font-size:13px;color:#a78bfa;font-weight:700;">Total: <span id="hw-total">0.00</span> DKK (job)</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div id="view-filaments" class="view">
+      <div class="page-header">
+        <div class="page-title">Filament <span>Database</span></div>
+        <button class="btn btn-success" onclick="toggleForm('filament-form', resetFilamentForm)">＋ Add Filament</button>
+      </div>
+
+      <div id="filament-form" class="add-form">
+        <div class="section-title" id="fil-form-title">New Filament Entry</div>
+        <div class="form-row cols-3">
+          <div class="field"><label>Type (e.g. PLA, PETG)</label><input id="nf-type" placeholder="PETG"></div>
+          <div class="field"><label>Brand</label><input id="nf-brand" placeholder="Bambu Lab"></div>
+          <div class="field"><label>Price / kg (DKK)</label><input id="nf-price" type="number" placeholder="200"></div>
+        </div>
+        <div class="form-row cols-3">
+          <div class="field">
+            <label>Badge Color</label>
+            <select id="nf-badge">
+              <option value="green">Green</option>
+              <option value="blue">Blue</option>
+              <option value="red">Red</option>
+              <option value="yellow">Yellow</option>
+              <option value="gray">Gray</option>
+            </select>
+          </div>
+          <div class="field"><label>Notes (optional)</label><input id="nf-notes" placeholder="e.g. matte finish..."></div>
+          <div class="field"><label>Color (optional)</label><input id="nf-color" placeholder="Black"></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-ghost" onclick="toggleForm('filament-form'); resetFilamentForm();">Cancel</button>
+          <button id="fil-save-btn" class="btn btn-success" onclick="saveFilament()">Add Filament</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:auto;">
+        <table class="db-table">
+          <thead>
+            <tr>
+              <th>Type</th><th>Brand</th><th>Price/kg (DKK)</th><th>Color</th><th>Notes</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="filament-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="view-printers" class="view">
+      <div class="page-header">
+        <div class="page-title">Printer <span>Database</span></div>
+        <button class="btn btn-success" onclick="toggleForm('printer-form', resetPrinterForm)">＋ Add Printer</button>
+      </div>
+
+      <div id="printer-form" class="add-form">
+        <div class="section-title" id="prn-form-title">New Printer Entry</div>
+        <div class="form-row cols-3">
+          <div class="field"><label>Printer Name / Model</label><input id="np-name" placeholder="BambuLab X1C"></div>
+          <div class="field"><label>Avg Power (Watt)</label><input id="np-power" type="number" placeholder="150"></div>
+          <div class="field"><label>Power Price kWh (DKK)</label><input id="np-kwh" type="number" placeholder="4"></div>
+        </div>
+        <div class="form-row cols-4">
+          <div class="field"><label>Machine Cost (DKK)</label><input id="np-cost" type="number" placeholder="10000"></div>
+          <div class="field"><label>Expected Life (hrs)</label><input id="np-life" type="number" placeholder="2000"></div>
+          <div class="field"><label>Parts Cost / yr (DKK)</label><input id="np-parts" type="number" placeholder="1000"></div>
+          <div class="field"><label>Daily Use (hrs)</label><input id="np-daily" type="number" placeholder="5"></div>
+        </div>
+        <div class="form-row cols-3">
+          <div class="field"><label>Yrs to keep printer</label><input id="np-years" type="number" placeholder="2"></div>
+          <div class="field"><label>Production days / yr</label><input id="np-proddays" type="number" placeholder="252"></div>
+          <div class="field"><label>Setup Fee (DKK)</label><input id="np-setup" type="number" placeholder="50"></div>
+        </div>
+        <div class="form-row cols-2">
+          <div class="field"><label>VAT % (region)</label><input id="np-vat" type="number" placeholder="25"></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-ghost" onclick="toggleForm('printer-form'); resetPrinterForm();">Cancel</button>
+          <button id="prn-save-btn" class="btn btn-success" onclick="savePrinter()">Add Printer</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:auto;">
+        <table class="db-table">
+          <thead>
+            <tr>
+              <th>Name</th><th>Avg Power</th><th>kWh</th><th>Cost/hr</th><th>Machine Cost</th><th>Life</th><th>Setup Fee</th><th>VAT%</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="printer-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="view-hardware" class="view">
+      <div class="page-header">
+        <div class="page-title">Hardware <span>Database</span></div>
+      </div>
+
+      <div id="hardware-form" class="add-form always-open">
+        <div class="section-title" id="hw-form-title">New Hardware Item</div>
+        <div class="form-row cols-4">
+          <div class="field"><label>Item Name</label><input id="nh-name" placeholder="M4 Insert nut"></div>
+          <div class="field"><label>Unit Price (DKK)</label><input id="nh-unitprice" type="number" placeholder="2.50"></div>
+          <div class="field"><label>Default Qty per item</label><input id="nh-qty" type="number" placeholder="1" value="1"></div>
+          <div class="field"><label>Note</label><input id="nh-note" placeholder="Optional note"></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-ghost" onclick="resetHardwareForm()">Clear Fields</button>
+          <button id="hw-save-btn" class="btn btn-success" onclick="saveHardware()">Add Item</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:auto;">
+        <table class="db-table">
+          <thead>
+            <tr>
+              <th>Item</th><th>Unit Price (DKK)</th><th>Default Qty / Item</th><th>Note</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="hardware-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div></div><div id="toast">✓ Saved!</div>
+
+<script>
+const DB = /*%%DATA_START%%*/
+{
+  "filaments": [
+    {"type":"PLA","brand":"Bambu Lab","price":200,"color":"","notes":""},
+    {"type":"PLA-CF","brand":"Bambu Lab","price":250,"color":"","notes":""},
+    {"type":"PLA","brand":"3DO","price":220,"color":"","notes":""},
+    {"type":"PLA","brand":"Filamentum","price":170,"color":"","notes":""},
+    {"type":"PETG","brand":"Bambu Lab","price":200,"color":"","notes":""},
+    {"type":"PETG-CF","brand":"Bambu Lab","price":240,"color":"","notes":""},
+    {"type":"PETG","brand":"3DO","price":220,"color":"","notes":""},
+    {"type":"PETG","brand":"Filamentum","price":160,"color":"","notes":""},
+    {"type":"PETG-CF","brand":"Filamentum","price":195,"color":"","notes":""},
+    {"type":"PETG-GF","brand":"Eryone3d","price":115,"color":"","notes":""},
+    {"type":"PETG","brand":"Rosa3D","price":62.5,"color":"","notes":""}
+  ],
+  "printers": [
+    {"name":"BambuLab X1C","power":150,"kwh":4,"machineCost":10640,"expectedLife":2520,"partsCostYear":1000,"dailyHrs":5,"yearsKeep":2,"prodDays":252,"setupFee":50,"vat":25},
+    {"name":"Elegoo CC","power":125,"kwh":4,"machineCost":3000,"expectedLife":1500,"partsCostYear":1000,"dailyHrs":5,"yearsKeep":2,"prodDays":252,"setupFee":50,"vat":25},
+    {"name":"Prusa Core One L","power":175,"kwh":4,"machineCost":13000,"expectedLife":4000,"partsCostYear":1100,"dailyHrs":4,"yearsKeep":2,"prodDays":252,"setupFee":50,"vat":25}
+  ],
+  "hardware": [
+    {"name":"Magnet with rubber 22mm dia 6mm tall","unitPrice":10.625,"defaultQty":1,"note":"M4 thread"}
+  ]
+}
+/*%%DATA_END%%*/;
+
+let editState = { fil: -1, prn: -1, hw: -1 };
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// NAVIGATION & UI
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function showView(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('view-' + v).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(el => {
+    if (el.textContent.toLowerCase().includes(v.slice(0, 5))) el.classList.add('active');
+  });
+  if (v === 'calculator') rebuildCalcDropdowns();
+  if (v === 'filaments') renderFilaments();
+  if (v === 'printers') renderPrinters();
+  if (v === 'hardware') renderHardware();
+}
+
+function toggleForm(id, resetCallback) {
+  const f = document.getElementById(id);
+  f.classList.toggle('open');
+  if(!f.classList.contains('open') && resetCallback) resetCallback();
+}
+
+function calcRunningCost(p) {
+  const depreciation = p.expectedLife > 0 ? (p.machineCost / p.expectedLife) : 0;
+  const totalHrs = p.yearsKeep * p.prodDays * p.dailyHrs;
+  const maintenancePrHr = totalHrs > 0 ? (p.partsCostYear * p.yearsKeep) / totalHrs : 0;
+  return depreciation + maintenancePrHr;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// FILAMENTS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function resetFilamentForm() {
+  editState.fil = -1;
+  ['nf-type','nf-brand','nf-price','nf-notes','nf-color'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('nf-badge').value = 'green';
+  document.getElementById('fil-form-title').textContent = "New Filament Entry";
+  document.getElementById('fil-save-btn').textContent = "Add Filament";
+}
+
+function saveFilament() {
+  const type = document.getElementById('nf-type').value.trim().toUpperCase();
+  const brand = document.getElementById('nf-brand').value.trim();
+  const price = parseFloat(document.getElementById('nf-price').value) || 0;
+  const notes = document.getElementById('nf-notes').value.trim();
+  const color = document.getElementById('nf-color').value.trim();
+  const badgeColor = document.getElementById('nf-badge').value;
+  if (!type || !brand || !price) return alert('Type, brand and price are required.');
+  
+  if (editState.fil > -1) {
+    DB.filaments[editState.fil] = { type, brand, price, color, notes, badgeColor };
+  } else {
+    DB.filaments.push({ type, brand, price, color, notes, badgeColor });
+  }
+  
+  renderFilaments();
+  document.getElementById('filament-form').classList.remove('open');
+  resetFilamentForm();
+}
+
+function editFilament(i) {
+  editState.fil = i;
+  const f = DB.filaments[i];
+  document.getElementById('nf-type').value = f.type;
+  document.getElementById('nf-brand').value = f.brand;
+  document.getElementById('nf-price').value = f.price;
+  document.getElementById('nf-notes').value = f.notes;
+  document.getElementById('nf-color').value = f.color;
+  
+  let bc = f.badgeColor;
+  if(!bc) {
+    const t = f.type.toLowerCase();
+    bc = t.includes('petg') ? 'blue' : t.includes('pla') ? 'green' : t.includes('abs') ? 'red' : 'yellow';
+  }
+  document.getElementById('nf-badge').value = bc;
+  
+  document.getElementById('fil-form-title').textContent = "Edit Filament";
+  document.getElementById('fil-save-btn').textContent = "Save Changes";
+  document.getElementById('filament-form').classList.add('open');
+}
+
+function deleteFilament(i) {
+  if (!confirm('Delete this filament?')) return;
+  DB.filaments.splice(i, 1);
+  renderFilaments();
+}
+
+function renderFilaments() {
+  const tb = document.getElementById('filament-tbody');
+  if (!DB.filaments.length) { tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;">No filaments yet.</td></tr>'; return; }
+  tb.innerHTML = DB.filaments.map((f, i) => {
+    let bc = f.badgeColor;
+    if(!bc) {
+      const t = f.type.toLowerCase();
+      bc = t.includes('petg') ? 'blue' : t.includes('pla') ? 'green' : t.includes('abs') ? 'red' : 'yellow';
+    }
+    return `
+    <tr>
+      <td><span class="badge ${bc}">${f.type}</span></td>
+      <td>${f.brand}</td>
+      <td style="color:var(--accent)">${fmt(f.price)}</td>
+      <td>${f.color || '—'}</td>
+      <td style="color:var(--text3)">${f.notes || '—'}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-warn btn-sm" onclick="editFilament(${i})">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteFilament(${i})">Delete</button>
+      </td>
+    </tr>`
+  }).join('');
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PRINTERS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function resetPrinterForm() {
+  editState.prn = -1;
+  ['np-name','np-power','np-kwh','np-cost','np-life','np-parts','np-daily','np-years','np-proddays','np-setup','np-vat'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('prn-form-title').textContent = "New Printer Entry";
+  document.getElementById('prn-save-btn').textContent = "Add Printer";
+}
+
+function savePrinter() {
+  const p = {
+    name: document.getElementById('np-name').value.trim(),
+    power: parseFloat(document.getElementById('np-power').value) || 0,
+    kwh: parseFloat(document.getElementById('np-kwh').value) || 4,
+    machineCost: parseFloat(document.getElementById('np-cost').value) || 0,
+    expectedLife: parseFloat(document.getElementById('np-life').value) || 1,
+    partsCostYear: parseFloat(document.getElementById('np-parts').value) || 0,
+    dailyHrs: parseFloat(document.getElementById('np-daily').value) || 5,
+    yearsKeep: parseFloat(document.getElementById('np-years').value) || 2,
+    prodDays: parseFloat(document.getElementById('np-proddays').value) || 252,
+    setupFee: parseFloat(document.getElementById('np-setup').value) || 0,
+    vat: parseFloat(document.getElementById('np-vat').value) || 25
+  };
+  if (!p.name) return alert('Printer name is required.');
+  
+  if (editState.prn > -1) { DB.printers[editState.prn] = p; } 
+  else { DB.printers.push(p); }
+  
+  renderPrinters();
+  document.getElementById('printer-form').classList.remove('open');
+  resetPrinterForm();
+}
+
+function editPrinter(i) {
+  editState.prn = i;
+  const p = DB.printers[i];
+  document.getElementById('np-name').value = p.name;
+  document.getElementById('np-power').value = p.power;
+  document.getElementById('np-kwh').value = p.kwh;
+  document.getElementById('np-cost').value = p.machineCost;
+  document.getElementById('np-life').value = p.expectedLife;
+  document.getElementById('np-parts').value = p.partsCostYear;
+  document.getElementById('np-daily').value = p.dailyHrs;
+  document.getElementById('np-years').value = p.yearsKeep;
+  document.getElementById('np-proddays').value = p.prodDays;
+  document.getElementById('np-setup').value = p.setupFee;
+  document.getElementById('np-vat').value = p.vat;
+  document.getElementById('prn-form-title').textContent = "Edit Printer";
+  document.getElementById('prn-save-btn').textContent = "Save Changes";
+  document.getElementById('printer-form').classList.add('open');
+}
+
+function deletePrinter(i) {
+  if (!confirm('Delete this printer?')) return;
+  DB.printers.splice(i, 1);
+  renderPrinters();
+}
+
+function renderPrinters() {
+  const tb = document.getElementById('printer-tbody');
+  if (!DB.printers.length) { tb.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;">No printers yet.</td></tr>'; return; }
+  tb.innerHTML = DB.printers.map((p, i) => `<tr>
+    <td style="color:var(--text)">${p.name}</td>
+    <td>${p.power}W</td>
+    <td>${fmt(p.kwh)}</td>
+    <td style="color:var(--accent)">${fmt(calcRunningCost(p))}</td>
+    <td>${fmt(p.machineCost)}</td>
+    <td>${p.expectedLife} hrs</td>
+    <td>${fmt(p.setupFee)}</td>
+    <td>${p.vat}%</td>
+    <td style="white-space:nowrap;">
+      <button class="btn btn-warn btn-sm" onclick="editPrinter(${i})">Edit</button>
+      <button class="btn btn-danger btn-sm" onclick="deletePrinter(${i})">Delete</button>
+    </td>
+  </tr>`).join('');
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// HARDWARE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function resetHardwareForm() {
+  editState.hw = -1;
+  ['nh-name','nh-unitprice','nh-note'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('nh-qty').value = '1';
+  document.getElementById('hw-form-title').textContent = "New Hardware Item";
+  document.getElementById('hw-save-btn').textContent = "Add Item";
+}
+
+function saveHardware() {
+  const h = {
+    name: document.getElementById('nh-name').value.trim(),
+    unitPrice: parseFloat(document.getElementById('nh-unitprice').value) || 0,
+    defaultQty: parseInt(document.getElementById('nh-qty').value) || 1,
+    note: document.getElementById('nh-note').value.trim()
+  };
+  if (!h.name) return alert('Item name is required.');
+
+  if (editState.hw > -1) { DB.hardware[editState.hw] = h; } 
+  else { DB.hardware.push(h); }
+
+  renderHardware();
+  resetHardwareForm();
+  buildHwSelector();
+}
+
+function editHardware(i) {
+  editState.hw = i;
+  const h = DB.hardware[i];
+  document.getElementById('nh-name').value = h.name;
+  document.getElementById('nh-unitprice').value = h.unitPrice;
+  document.getElementById('nh-qty').value = h.defaultQty;
+  document.getElementById('nh-note').value = h.note;
+  document.getElementById('hw-form-title').textContent = "Edit Hardware Item";
+  document.getElementById('hw-save-btn').textContent = "Save Changes";
+}
+
+function deleteHardware(i) {
+  if (!confirm('Delete this hardware item?')) return;
+  DB.hardware.splice(i, 1);
+  renderHardware();
+  buildHwSelector();
+}
+
+function renderHardware() {
+  const tb = document.getElementById('hardware-tbody');
+  if (!DB.hardware.length) { tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;">No hardware yet.</td></tr>'; return; }
+  tb.innerHTML = DB.hardware.map((h, i) => `
+    <tr>
+      <td style="color:var(--text)">${h.name}</td>
+      <td style="color:#a78bfa">${fmt(h.unitPrice)}</td>
+      <td>${h.defaultQty}</td>
+      <td style="color:var(--text3)">${h.note || '—'}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-warn btn-sm" onclick="editHardware(${i})">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteHardware(${i})">Delete</button>
+      </td>
+    </tr>`).join('');
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// CALCULATOR
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function rebuildCalcDropdowns() {
+  const types = [...new Set(DB.filaments.map(f => f.type))].sort();
+  const typeEl = document.getElementById('c-fil-type');
+  const prevType = typeEl.value;
+  typeEl.innerHTML = '<option value="">-- select type --</option>' + types.map(t => `<option value="${t}" ${t===prevType?'selected':''}>${t}</option>`).join('');
+
+  const pEl = document.getElementById('c-printer');
+  const prevP = pEl.value;
+  pEl.innerHTML = '<option value="">-- select printer --</option>' + DB.printers.map(p => `<option value="${p.name}" ${p.name===prevP?'selected':''}>${p.name}</option>`).join('');
+  if (prevP) onPrinterChange();
+
+  if (prevType) { onFilTypeChange(); }
+  buildHwSelector();
+}
+
+function onFilTypeChange() {
+  const type = document.getElementById('c-fil-type').value;
+  const brands = [...new Set(DB.filaments.filter(f => f.type === type).map(f => f.brand))].sort();
+  const brandEl = document.getElementById('c-fil-brand');
+  brandEl.innerHTML = '<option value="">-- select brand --</option>' + brands.map(b => `<option value="${b}">${b}</option>`).join('');
+  document.getElementById('c-fil-price').value = '';
+  calculate();
+}
+
+function onFilBrandChange() {
+  const type = document.getElementById('c-fil-type').value;
+  const brand = document.getElementById('c-fil-brand').value;
+  const fil = DB.filaments.find(f => f.type === type && f.brand === brand);
+  document.getElementById('c-fil-price').value = fil ? fil.price : '';
+  calculate();
+}
+
+function onPrinterChange() {
+  const name = document.getElementById('c-printer').value;
+  const p = DB.printers.find(pr => pr.name === name);
+  if (p) document.getElementById('c-vat').value = p.vat;
+  calculate();
+}
+
+function buildHwSelector() {
+  const el = document.getElementById('hw-selector');
+  if (!DB.hardware.length) { el.innerHTML = '<div style="color:var(--text3);font-size:12px;">No hardware items defined.</div>'; return; }
+  el.innerHTML = DB.hardware.map((h, i) => `
+    <div style="display:grid;grid-template-columns:1fr 90px 100px;gap:8px;align-items:center;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" id="hw-check-${i}" onchange="calculate()" style="accent-color:var(--accent2);width:auto;">
+        <label for="hw-check-${i}" style="font-size:12px;color:var(--text2);cursor:pointer;">${h.name}</label>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <label style="font-size:10px;color:var(--text3);">Qty/item:</label>
+        <input type="number" id="hw-qty-${i}" value="${h.defaultQty}" min="0" oninput="calculate()" style="width:50px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:inherit;font-size:12px;padding:3px 6px;">
+      </div>
+      <div style="font-size:12px;color:#a78bfa;text-align:right;">${fmt(h.unitPrice)} DKK ea.</div>
+    </div>`).join('');
+}
+
+function calculate() {
+  const grams = parseFloat(document.getElementById('c-grams').value) || 0;
+  const filPrice = parseFloat(document.getElementById('c-fil-price').value) || 0;
+  const markup = (parseFloat(document.getElementById('c-markup').value) || 0) / 100;
+  const totalHrs = (parseFloat(document.getElementById('c-hours').value) || 0) + ((parseFloat(document.getElementById('c-mins').value) || 0) / 60);
+  const items = parseInt(document.getElementById('c-items').value) || 1;
+  const profitPct = (parseFloat(document.getElementById('c-profit').value) || 0) / 100;
+  const vatPct = (parseFloat(document.getElementById('c-vat').value) || 0) / 100;
+  const vatOn = document.getElementById('c-vat-on').checked;
+
+  const pName = document.getElementById('c-printer').value;
+  const p = DB.printers.find(pr => pr.name === pName);
+  
+  const powerW = p ? p.power : 0;
+  const kwh = p ? p.kwh : 0;
+  const setupFee = p ? p.setupFee : 0;
+  const runningCost = p ? calcRunningCost(p) : 0;
+
+  const filCostPerKg = filPrice;
+  const filamentCostJob = (grams / 1000) * filCostPerKg;
+  const filamentMarkupJob = filamentCostJob * markup;
+
+  const powerCostJob = (powerW / 1000) * kwh * totalHrs;
+  const runningCostJob = runningCost * totalHrs;
+
+  const hwCostPerItem = calcHwTotal();
+  const hwCostJob = hwCostPerItem * items;
+
+  const totalCostJob = filamentCostJob + filamentMarkupJob + powerCostJob + runningCostJob + setupFee + hwCostJob;
+  const totalCostItem = totalCostJob / items;
+
+  const profitJob = totalCostJob * profitPct;
+  const saleExVatJob = totalCostJob + profitJob;
+  const vatAmtJob = vatOn ? saleExVatJob * vatPct : 0;
+  const saleIncVatJob = saleExVatJob + vatAmtJob;
+
+  const profitItem = totalCostItem * profitPct;
+  const saleExVatItem = totalCostItem + profitItem;
+  const vatAmtItem = vatOn ? saleExVatItem * vatPct : 0;
+  const saleIncVatItem = saleExVatItem + vatAmtItem;
+
+  setText('r-total-cost', fmt(totalCostJob) + ' DKK'); setText('r-cost-item', fmt(totalCostItem) + ' DKK');
+  setText('r-sale-exvat', fmt(saleExVatJob) + ' DKK'); setText('r-sale-incvat', fmt(saleIncVatJob) + ' DKK');
+  setText('r-item-exvat', fmt(saleExVatItem) + ' DKK'); setText('r-item-incvat', fmt(saleIncVatItem) + ' DKK');
+
+  setText('b-fil-unit', fmt(filCostPerKg) + '/kg'); setText('b-fil-job', fmt(filamentCostJob) + ' DKK'); setText('b-fil-item', fmt(filamentCostJob / items) + ' DKK');
+  setText('b-markup-job', fmt(filamentMarkupJob) + ' DKK'); setText('b-markup-item', fmt(filamentMarkupJob / items) + ' DKK');
+  setText('b-power-unit', fmt(powerW) + 'W × ' + fmt2(totalHrs) + 'h'); setText('b-power-job', fmt(powerCostJob) + ' DKK'); setText('b-power-item', fmt(powerCostJob / items) + ' DKK');
+  setText('b-running-job', fmt(runningCostJob) + ' DKK'); setText('b-running-item', fmt(runningCostJob / items) + ' DKK');
+  setText('b-setup-job', fmt(setupFee) + ' DKK'); setText('b-setup-item', fmt(setupFee / items) + ' DKK');
+  setText('b-hw-job', fmt(hwCostJob) + ' DKK'); setText('b-hw-item', fmt(hwCostPerItem) + ' DKK');
+  setText('b-total-job', fmt(totalCostJob) + ' DKK'); setText('b-total-item', fmt(totalCostItem) + ' DKK');
+  setText('b-profit-pct', Math.round(profitPct * 100)); setText('b-profit-job', fmt(profitJob) + ' DKK'); setText('b-profit-item', fmt(profitItem) + ' DKK');
+  setText('b-exvat-job', fmt(saleExVatJob) + ' DKK'); setText('b-exvat-item', fmt(saleExVatItem) + ' DKK');
+  setText('b-vat-pct', Math.round(vatPct * 100)); setText('b-vat-job', (vatOn ? fmt(vatAmtJob) : '0.00') + ' DKK'); setText('b-vat-item', (vatOn ? fmt(vatAmtItem) : '0.00') + ' DKK');
+  setText('b-incvat-job', fmt(saleIncVatJob) + ' DKK'); setText('b-incvat-item', fmt(saleIncVatItem) + ' DKK');
+  setText('hw-total', fmt(hwCostJob));
+}
+
+function calcHwTotal() {
+  let total = 0;
+  DB.hardware.forEach((h, i) => {
+    const cb = document.getElementById('hw-check-' + i);
+    const qty = parseFloat(document.getElementById('hw-qty-' + i)?.value) || 0;
+    if (cb && cb.checked) total += h.unitPrice * qty;
+  });
+  return total;
+}
+
+function saveHTML() {
+  const dataJSON = JSON.stringify(DB, null, 2);
+  let html = document.documentElement.outerHTML;
+  html = html.replace(/\/\*%%DATA_START%%\*\/[\s\S]*?\/\*%%DATA_END%%\*\//, `/*%%DATA_START%%*/\n${dataJSON}\n/*%%DATA_END%%*/`);
+  const blob = new Blob([html], { type: 'text/html' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  const d = new Date(); const stamp = d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes());
+  a.download = '3D_Print_Calculator_' + stamp + '.html'; a.click(); URL.revokeObjectURL(a.href);
+  showToast('File saved!');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = '✓ ' + msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function fmt(n) { return (parseFloat(n) || 0).toFixed(2); }
+function fmt2(n) { return (parseFloat(n) || 0).toFixed(2); }
+function pad(n) { return String(n).padStart(2, '0'); }
+function setText(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+
+document.addEventListener('DOMContentLoaded', () => { rebuildCalcDropdowns(); calculate(); });
+</script>
+</body>
+</html>
