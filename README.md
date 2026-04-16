@@ -1,5 +1,5 @@
 # 3D-printing-stuff
-Different usefull html tools to use for 3D printing
+Different useful HTML tools to use for 3D printing
 
 <br><br> Print Price Calculator:  
 https://za-x-az.github.io/3D-printing-stuff/Print%20Price%20Calculator/PPC.html
