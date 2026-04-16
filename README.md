@@ -2,5 +2,5 @@
 Different usefull html tools to use for 3D printing
 
 <br><br> Print Price Calculator:  
-https://za-x-az.github.io/3D-printing-stuff/Print Price Calculator/PPC.html
-Print Price Calculator/PPC.html
+For the best use downloade the html, and add your own data for Filaments, Printers, and Hardware like nuts and bolts.
+Save the HTML with the save button, and the data will be there for next time.
