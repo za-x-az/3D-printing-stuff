@@ -18,3 +18,9 @@ Hosting it here on GitHub enables others to add or remove features! 🚀<br>
 * **Import/Export:** Add data functionality that is ideally compatible with upcoming versions.<br>
 * **Currency:** Remove the denomination to make it more universal, or add the ability to change it.<br>
 * **Efficiency:** Remove redundant data like VAT and kWh price on every single printer, as that should be a global setting.<br>
+
+
+
+If you have data from a smart plug, you can use this to get an average active print power use. <br>
+It filters out low power draw (like idle power) to give you an accurate average of what the printer actually pulls while printing. ⚡<br>
+https://za-x-az.github.io/3D-printing-stuff/Print%20Price%20Calculator/Power%20Usage%20Analysis/PUA.html
