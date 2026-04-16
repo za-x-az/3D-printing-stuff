@@ -1,0 +1,50 @@
+<!DOCTYPE html> 
+<html> 
+<head> 
+    <meta charset="utf-8"> 
+    <title>3D Printing Stuff</title> 
+    <style> 
+        /* Some CSS fixes */ 
+        .container { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+        } 
+        .hours, .minutes, .markup, .vat { 
+            margin: 10px; 
+        } 
+        /* Fixes for truncation on lines 70 and 78 */ 
+        .edit-button { 
+            cursor: pointer; 
+            display: inline-block; 
+            padding: 10px; 
+        } 
+    </style> 
+</head> 
+<body> 
+    <div class="container"> 
+        <h1>3D Printing Stuff</h1> 
+        <form id="calculatorForm"> 
+            <label for="hours">Hours:</label> 
+            <input type="text" class="hours" id="hours"> 
+            <label for="minutes">Minutes:</label> 
+            <input type="text" class="minutes" id="minutes"> 
+            <label for="markup">Markup:</label> 
+            <input type="text" class="markup" id="markup"> 
+            <label for="vat">VAT:</label> 
+            <input type="text" class="vat" id="vat"> 
+            <button class="edit-button" onclick="scrollToForm()">Edit</button> 
+        </form> 
+        <script> 
+            // Scroll to form function 
+            function scrollToForm() { 
+                document.getElementById('calculatorForm').scrollIntoView({ behavior: 'smooth' }); 
+            } 
+            // Updated function without the duplicate fmt2() 
+            function fmt1() { 
+                // Implement functionality here 
+            } 
+        </script> 
+    </div> 
+</body> 
+</html>
