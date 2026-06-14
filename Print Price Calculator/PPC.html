@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Print Price Calculator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  body { font-family:'Inter',sans-serif; }
+  .nav-item.active { background:linear-gradient(135deg,#6366f1,#8b5cf6); color:#fff; }
+  .nav-item { transition:all 0.2s ease; }
+  .view { display:none; }
+  .view.active { display:block; }
+  .input-field { background:#334155; border:1px solid #475569; color:#e2e8f0; transition:border-color 0.2s; }
+  .input-field:focus { outline:none; border-color:#6366f1; box-shadow:0 0 0 2px rgba(99,102,241,0.2); }
+  select option { background:#334155; color:#e2e8f0; }
+  .btn-primary { background:linear-gradient(135deg,#6366f1,#8b5cf6); transition:all 0.2s; }
+  .btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 15px rgba(99,102,241,0.4); }
+  .btn-success { background:linear-gradient(135deg,#10b981,#059669); transition:all 0.2s; }
+  .btn-success:hover { transform:translateY(-1px); box-shadow:0 4px 15px rgba(16,185,129,0.4); }
+  .btn-danger-soft { background:linear-gradient(135deg,#ef4444,#dc2626); transition:all 0.2s; }
+  .btn-danger-soft:hover { transform:translateY(-1px); box-shadow:0 4px 15px rgba(239,68,68,0.4); }
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; backdrop-filter:blur(4px); }
+  .modal-overlay.active { display:flex; }
+  .filament-row { animation:slideIn 0.2s ease; }
+  .hardware-row { animation:slideIn 0.2s ease; }
+  @keyframes slideIn { from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:translateY(0);} }
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-track { background:#1e293b; }
+  ::-webkit-scrollbar-thumb { background:#475569; border-radius:3px; }
+  ::-webkit-scrollbar-thumb:hover { background:#64748b; }
+  table { border-collapse:collapse; }
+  .db-table th { background:#1e293b; }
+  .db-table tr:hover td { background:rgba(99,102,241,0.06); }
+  .glow-text { text-shadow:0 0 24px rgba(99,102,241,0.5); }
+  .info-chip { background:#1e293b; border:1px solid #334155; border-radius:10px; padding:8px 12px; }
+  .csv-btn { display:flex; align-items:center; gap:6px; padding:7px 13px; border-radius:10px; font-size:12px; font-weight:600; border:1px solid #475569; color:#94a3b8; transition:all 0.2s; cursor:pointer; white-space:nowrap; }
+  .csv-btn:hover { border-color:#6366f1; color:#a5b4fc; background:rgba(99,102,241,0.08); }
+  .csv-import:hover { border-color:#10b981; color:#6ee7b7; background:rgba(16,185,129,0.08); }
+  .help-section { margin-bottom:22px; }
+  .help-section h3 { font-size:14px; font-weight:700; color:#a5b4fc; margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+  .help-section p,.help-section li { font-size:13px; color:#94a3b8; line-height:1.75; }
+  .help-section ul { list-style:disc; padding-left:18px; margin-top:4px; }
+  .formula-box { background:#1e293b; border:1px solid #475569; border-radius:8px; padding:10px 14px; font-family:monospace; font-size:12px; color:#6ee7b7; margin-top:6px; line-height:1.8; }
+  /* purge confirm zone */
+  .purge-zone { border:2px dashed #ef4444; border-radius:12px; padding:20px; background:rgba(239,68,68,0.05); }
+</style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+
+<!-- =====================================================================
+     DATABASE — Edit this block freely
+     ===================================================================== -->
+<script id="db-script">
+// ============================================================
+// DATABASE BLOCK — Edit freely
+// ============================================================
+var DB = {
+  version: 1,
+  printers: [
+    { id:1, name:"BambuLab X1C",     machineCost:10640, maintenance:1000, payoffTime:5,   powerConsumptionWatts:150, expectedLifeHours:6300 },
+    { id:2, name:"Elegoo CC",         machineCost:7500,  maintenance:600,  payoffTime:4,   powerConsumptionWatts:125, expectedLifeHours:5040 },
+    { id:3, name:"Prusa Core One L", machineCost:12000, maintenance:1200, payoffTime:6,   powerConsumptionWatts:175, expectedLifeHours:7560 }
+  ],
+  filaments: [
+    { id:1, brand:"Bambu Lab", type:"PLA",  price:200,  weight:1000 },
+    { id:2, brand:"3DO",       type:"PLA",  price:220,  weight:1000 },
+    { id:3, brand:"Rosa3D",    type:"PETG", price:62.5, weight:750  }
+  ],
+  hardware: [
+    { id:1, name:"Magnet 22x6mm", pricePerItem:10.62 },
+    { id:2, name:"M3x6",          pricePerItem:0.30  },
+    { id:3, name:"M3x10",         pricePerItem:0.32  }
+  ],
+  settings: {
+    vat:25, powerCost:1.20, setupFee:15,
+    filamentMarkup:15, defaultFilamentRows:3,
+    currency:"kr"
+  }
+};
+// ============================================================
+// END DATABASE BLOCK
+// ============================================================
+</script>
+
+<!-- ═══════════════════════ MODALS ═══════════════════════ -->
+
+<!-- HELP MODAL -->
+<div id="helpModal" class="modal-overlay items-start justify-center p-4 overflow-y-auto">
+  <div class="bg-slate-800 border border-slate-600 rounded-2xl w-full max-w-2xl shadow-2xl my-6">
+    <div class="p-6 border-b border-slate-600 flex items-center justify-between sticky top-0 bg-slate-800 rounded-t-2xl z-10">
+      <h2 class="text-lg font-bold text-white flex items-center gap-2">📖 Help Guide</h2>
+      <button onclick="closeHelp()" class="text-slate-400 hover:text-white text-2xl leading-none transition-colors">&times;</button>
+    </div>
+    <div class="p-6 space-y-1">
+      <div class="help-section">
+        <h3>🧮 Calculator</h3>
+        <ul>
+          <li><strong class="text-slate-300">Filaments:</strong> 3 rows load by default. Pick <em>Type</em> first — the Brand dropdown auto-filters to matching brands. Enter grams used per job.</li>
+          <li><strong class="text-slate-300">Printer &amp; Time:</strong> Select a printer; all costs derive automatically from its lifecycle settings. Enter hours and minutes.</li>
+          <li><strong class="text-slate-300">Hardware:</strong> "Add Hardware" opens a searchable modal. Quantity is per printed item.</li>
+          <li><strong class="text-slate-300">Job Settings:</strong> Set Items per Job and Profit Margin %. Global values (VAT, Setup Fee, Filament Markup) are pulled from Settings.</li>
+        </ul>
+      </div>
+      <div class="help-section">
+        <h3>⚙️ Global Settings</h3>
+        <ul>
+          <li><strong class="text-slate-300">VAT %</strong> — applied on top of the sale price.</li>
+          <li><strong class="text-slate-300">Power Cost (kWh)</strong> — your electricity rate.</li>
+          <li><strong class="text-slate-300">Setup Fee</strong> — flat fee added to every job, excluded from the profit markup base.</li>
+          <li><strong class="text-slate-300">Filament Markup %</strong> — global uplift on every filament line's raw material cost.</li>
+          <li><strong class="text-slate-300">Mass Delete</strong> — permanently wipes all DB data. Export a backup first!</li>
+        </ul>
+      </div>
+      <div class="help-section">
+        <h3>🖨️ Printer Hourly Cost Formula</h3>
+        <div class="formula-box">With Payoff Time:    Hourly Cost = (Machine Cost + Maintenance × Payoff Time) ÷ Expected Life Hours
+Without Payoff Time: Hourly Cost = Machine Cost ÷ Expected Life Hours
+Printer Job Cost     = Print Time (hrs) × Hourly Cost</div>
+        <p class="mt-2"><strong class="text-slate-300">Payoff Time</strong> is optional (e.g. 0.5 = 6 months, 1 = 1 year). When left blank, only the Machine Cost is amortised over the Expected Life Hours. Maintenance is the annual upkeep cost.</p>
+      </div>
+      <div class="help-section">
+        <h3>🎨 Filament Cost Formula</h3>
+        <div class="formula-box">Filament Cost = Grams Used × (Spool Price / Spool Weight g) × (1 + Filament Markup %)</div>
+        <p class="mt-2">Each filament carries its own spool weight so a 750 g spool is priced correctly vs a 1 kg spool.</p>
+      </div>
+      <div class="help-section">
+        <h3>⚡ Power Cost Formula</h3>
+        <div class="formula-box">Power Cost = Print Hours × (Printer Watts / 1000) × Power Cost per kWh</div>
+      </div>
+      <div class="help-section">
+        <h3>🔩 Hardware Cost</h3>
+        <div class="formula-box">Hardware Total = Unit Price × Quantity per Item × Items per Job</div>
+        <p class="mt-2">Hardware is passed through at cost — no profit markup applied.</p>
+      </div>
+      <div class="help-section">
+        <h3>💰 Profit &amp; Pricing</h3>
+        <div class="formula-box">Cost          = Filament + Printer + Power + Hardware + Setup Fee
+Profit Base   = Filament + Printer + Power + Hardware  ← Setup Fee excluded
+Profit        = Profit Base × Profit Margin %
+Sale (ex VAT) = Cost + Profit
+Sale (inc VAT) = Sale (ex VAT) × (1 + VAT %)</div>
+      </div>
+      <div class="help-section">
+        <h3>📤 CSV Import / Export</h3>
+        <ul>
+          <li>Each database view has <strong class="text-slate-300">Export CSV</strong> and <strong class="text-slate-300">Import CSV</strong>.</li>
+          <li>Export downloads all current items as a clean CSV with a header row.</li>
+          <li>Import matches by name (printers/hardware) or brand+type (filaments) and upserts — existing records update, new ones are added. Headers are case-insensitive; column order doesn't matter.</li>
+        </ul>
+      </div>
+      <div class="help-section">
+        <h3>💾 Save &amp; Download</h3>
+        <p>The green button in the sidebar generates a new self-contained HTML file with all DB data and settings baked in. The version number auto-increments each time (e.g. calculator_v2.html).</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MASS DELETE MODAL -->
+<div id="purgeModal" class="modal-overlay items-center justify-center p-4">
+  <div class="bg-slate-800 border border-red-700 rounded-2xl w-full max-w-lg shadow-2xl">
+    <div class="p-6 border-b border-red-800 flex items-center gap-3">
+      <span class="text-3xl">⚠️</span>
+      <div>
+        <h3 class="text-lg font-bold text-red-400">Mass Delete All Data</h3>
+        <p class="text-sm text-slate-400 mt-0.5">This action is permanent and cannot be undone.</p>
+      </div>
+    </div>
+    <div class="p-6 space-y-5">
+      <div class="purge-zone">
+        <p class="text-sm text-red-300 font-semibold mb-3">This will permanently delete:</p>
+        <ul class="text-sm text-slate-400 space-y-1 list-disc pl-5">
+          <li>All <strong class="text-white" id="purgeCountPrinters">0</strong> printers</li>
+          <li>All <strong class="text-white" id="purgeCountFilaments">0</strong> filaments</li>
+          <li>All <strong class="text-white" id="purgeCountHardware">0</strong> hardware items</li>
+        </ul>
+      </div>
+      <div class="bg-slate-700 rounded-xl p-4 border border-slate-600">
+        <p class="text-sm text-slate-300 font-medium mb-3">💡 Export your data first — you can re-import it later:</p>
+        <div class="flex gap-2 flex-wrap">
+          <button onclick="exportCSV('printers')" class="csv-btn text-xs">📤 Export Printers</button>
+          <button onclick="exportCSV('filaments')" class="csv-btn text-xs">📤 Export Filaments</button>
+          <button onclick="exportCSV('hardware')" class="csv-btn text-xs">📤 Export Hardware</button>
+        </div>
+      </div>
+      <label class="flex items-start gap-3 cursor-pointer select-none">
+        <input type="checkbox" id="purgeConfirmCheck" class="mt-1 w-4 h-4 rounded accent-red-500">
+        <span class="text-sm text-slate-300">I understand that without a CSV backup, <strong class="text-red-400">all my data will be lost permanently</strong> and there is no way to undo this.</span>
+      </label>
+    </div>
+    <div class="p-6 border-t border-slate-700 flex gap-3 justify-end">
+      <button onclick="closePurgeModal()" class="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white border border-slate-600 hover:border-slate-400 transition-colors">Cancel</button>
+      <button onclick="executePurge()" id="purgeExecuteBtn" disabled class="btn-danger-soft text-white px-6 py-2 rounded-lg text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none">Delete Everything</button>
+    </div>
+  </div>
+</div>
+
+<!-- HARDWARE (Calculator) MODAL -->
+<div id="hardwareModal" class="modal-overlay items-center justify-center p-4">
+  <div class="bg-slate-800 border border-slate-600 rounded-2xl w-full max-w-lg shadow-2xl">
+    <div class="p-6 border-b border-slate-600 flex items-center justify-between">
+      <h3 class="text-lg font-semibold text-white">Add Hardware</h3>
+      <button onclick="closeHardwareModal()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <div class="p-4 border-b border-slate-600">
+      <input id="hardwareSearch" type="text" placeholder="Search hardware…" class="input-field w-full rounded-lg px-4 py-2 text-sm" oninput="filterHardwareModal()">
+    </div>
+    <div id="hardwareModalList" class="p-4 max-h-64 overflow-y-auto space-y-2"></div>
+    <div class="p-4 border-t border-slate-600 flex items-center gap-3">
+      <label class="text-sm text-slate-400 whitespace-nowrap">Qty per item:</label>
+      <input id="hardwareQty" type="number" min="1" value="1" class="input-field rounded-lg px-3 py-2 text-sm w-24">
+      <button onclick="confirmHardware()" class="btn-primary text-white px-4 py-2 rounded-lg text-sm font-medium flex-1">Add to Job</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRINTER MODAL -->
+<div id="printerModal" class="modal-overlay items-center justify-center p-4">
+  <div class="bg-slate-800 border border-slate-600 rounded-2xl w-full max-w-lg shadow-2xl">
+    <div class="p-6 border-b border-slate-600 flex items-center justify-between">
+      <h3 id="printerModalTitle" class="text-lg font-semibold text-white">Add Printer</h3>
+      <button onclick="closePrinterModal()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <div class="p-6 space-y-4">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1.5 font-medium">Printer Name</label>
+        <input id="printerModalName" type="text" class="input-field w-full rounded-lg px-4 py-2.5 text-sm" placeholder="e.g. BambuLab A1 Mini">
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Machine Cost</label>
+          <input id="printerModalMachineCost" type="number" min="0" step="any" class="input-field w-full rounded-lg px-4 py-2.5 text-sm" placeholder="10640"></div>
+        <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Expected Life Time (hrs)</label>
+          <input id="printerModalLifeHours" type="number" min="1" step="any" class="input-field w-full rounded-lg px-4 py-2.5 text-sm" placeholder="e.g. 6300"></div>
+        <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Maintenance / yr</label>
+          <input id="printerModalMaintenance" type="number" min="0" step="any" class="input-field w-full rounded-lg px-4 py-2.5 text-sm" placeholder="1000"></div>
+        <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Power (W)</label>
+          <input id="printerModalWatts" type="number" min="0" class="input-field w-full rounded-lg px-4 py-2.5 text-sm" placeholder="150"></div>
+        <div class="col-span-2">
+          <label class="block text-xs text-slate-400 mb-1.5 font-medium flex items-center gap-2">
+            Payoff Time (years)
+            <span class="text-xs text-slate-500 font-normal italic">optional — e.g. 0.5 for 6 months, 1 for a year</span>
+          </label>
+          <input id="printerModalPayoffTime" type="number" min="0" step="0.5" class="input-field w-full rounded-lg px-4 py-2.5 text-sm" placeholder="Leave blank to use Machine Cost only">
+        </div>
+      </div>
+      <div class="bg-slate-900 rounded-xl px-4 py-3 border border-slate-600">
+        <div class="text-xs text-slate-500 mb-0.5">Calculated Cost/hr (updates as you type)</div>
+        <div id="printerModalCalcCost" class="text-sm font-bold text-indigo-400">—</div>
+      </div>
+      <input id="printerModalId" type="hidden" value="">
+    </div>
+    <div class="p-6 border-t border-slate-600 flex gap-3 justify-end">
+      <button onclick="closePrinterModal()" class="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white border border-slate-600 hover:border-slate-400 transition-colors">Cancel</button>
+      <button onclick="savePrinterModal()" class="btn-primary text-white px-6 py-2 rounded-lg text-sm font-medium">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- FILAMENT MODAL -->
+<div id="filamentModal" class="modal-overlay items-center justify-center p-4">
+  <div class="bg-slate-800 border border-slate-600 rounded-2xl w-full max-w-md shadow-2xl">
+    <div class="p-6 border-b border-slate-600 flex items-center justify-between">
+      <h3 id="filamentModalTitle" class="text-lg font-semibold text-white">Add Filament</h3>
+      <button onclick="closeFilamentModal()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <div class="p-6 space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Type / Material</label>
+          <input id="filamentModalType" type="text" class="input-field w-full rounded-lg px-4 py-2.5 text-sm" placeholder="e.g. PLA"></div>
+        <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Brand</label>
+          <input id="filamentModalBrand" type="text" class="input-field w-full rounded-lg px-4 py-2.5 text-sm" placeholder="e.g. Bambu Lab"></div>
+        <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Spool Price</label>
+          <input id="filamentModalPrice" type="number" min="0" step="0.01" class="input-field w-full rounded-lg px-4 py-2.5 text-sm" placeholder="200"></div>
+        <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Spool Weight (g)</label>
+          <input id="filamentModalWeight" type="number" min="1" class="input-field w-full rounded-lg px-4 py-2.5 text-sm" placeholder="1000"></div>
+      </div>
+      <input id="filamentModalId" type="hidden" value="">
+    </div>
+    <div class="p-6 border-t border-slate-600 flex gap-3 justify-end">
+      <button onclick="closeFilamentModal()" class="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white border border-slate-600 hover:border-slate-400 transition-colors">Cancel</button>
+      <button onclick="saveFilamentModal()" class="btn-primary text-white px-6 py-2 rounded-lg text-sm font-medium">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- HARDWARE DB MODAL -->
+<div id="hardwareDBModal" class="modal-overlay items-center justify-center p-4">
+  <div class="bg-slate-800 border border-slate-600 rounded-2xl w-full max-w-md shadow-2xl">
+    <div class="p-6 border-b border-slate-600 flex items-center justify-between">
+      <h3 id="hardwareDBModalTitle" class="text-lg font-semibold text-white">Add Hardware</h3>
+      <button onclick="closeHardwareDBModal()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+    </div>
+    <div class="p-6 space-y-4">
+      <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Hardware Name</label>
+        <input id="hwDBModalName" type="text" class="input-field w-full rounded-lg px-4 py-2.5 text-sm" placeholder="e.g. M4x12"></div>
+      <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Price per Item</label>
+        <input id="hwDBModalPrice" type="number" min="0" step="0.001" class="input-field w-full rounded-lg px-4 py-2.5 text-sm" placeholder="0.50"></div>
+      <input id="hwDBModalId" type="hidden" value="">
+    </div>
+    <div class="p-6 border-t border-slate-600 flex gap-3 justify-end">
+      <button onclick="closeHardwareDBModal()" class="px-4 py-2 rounded-lg text-sm text-slate-400 hover:text-white border border-slate-600 hover:border-slate-400 transition-colors">Cancel</button>
+      <button onclick="saveHardwareDBModal()" class="btn-primary text-white px-6 py-2 rounded-lg text-sm font-medium">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ LAYOUT ═══════════════════════ -->
+<div class="flex min-h-screen">
+
+  <!-- SIDEBAR -->
+  <aside class="w-64 bg-slate-800 border-r border-slate-700 flex flex-col fixed top-0 left-0 h-full z-50 shadow-xl">
+    <div class="p-5 border-b border-slate-700">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">3D</div>
+        <div>
+          <div class="font-bold text-white text-sm leading-tight">3D Print Calculator</div>
+          <div id="versionBadge" class="text-xs text-slate-400 mt-0.5">v1</div>
+        </div>
+      </div>
+    </div>
+    <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+      <button onclick="showView('calculator')" id="nav-calculator" class="nav-item active w-full text-left px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-3">
+        <span>🧮</span> Calculator
+      </button>
+      <button onclick="showView('settings')" id="nav-settings" class="nav-item w-full text-left px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-700">
+        <span>⚙️</span> Global Settings
+      </button>
+      <div class="pt-3 pb-1 px-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">Databases</div>
+      <button onclick="showView('printers')" id="nav-printers" class="nav-item w-full text-left px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-700">
+        <span>🖨️</span> Printers
+      </button>
+      <button onclick="showView('filaments')" id="nav-filaments" class="nav-item w-full text-left px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-700">
+        <span>🎨</span> Filaments
+      </button>
+      <button onclick="showView('hardware')" id="nav-hardware" class="nav-item w-full text-left px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-3 text-slate-400 hover:text-white hover:bg-slate-700">
+        <span>🔩</span> Hardware
+      </button>
+    </nav>
+    <div class="p-4 border-t border-slate-700 space-y-2">
+      <button onclick="openHelp()" class="w-full text-slate-300 hover:text-white border border-slate-600 hover:border-indigo-400 px-4 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Help Guide
+      </button>
+      <button onclick="saveFile()" class="btn-success w-full text-white px-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Save &amp; Download
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="ml-64 flex-1 p-6 overflow-y-auto">
+    <div class="max-w-[1400px] mx-auto">
+
+    <!-- ═══ CALCULATOR ═══ -->
+    <div id="view-calculator" class="view active">
+      <div class="mb-7 flex items-center justify-between">
+        <div>
+          <h1 class="text-3xl font-bold text-white glow-text">Price Calculator</h1>
+          <p class="text-slate-400 mt-1 text-sm">Configure your print job for instant pricing</p>
+        </div>
+        <button onclick="clearCalculator()" class="border border-slate-600 hover:border-red-500 hover:text-red-400 text-slate-400 px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          Clear All
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-5">
+
+        <!-- FILAMENTS CARD -->
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+              <span class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-sm">🎨</span>
+              Filaments
+            </h2>
+            <button onclick="addFilamentRow()" id="addFilamentBtn" class="btn-primary text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Row
+            </button>
+          </div>
+          <!-- Column headers: Type first, then Brand, then Grams -->
+          <div class="grid grid-cols-12 gap-2 mb-2 px-0.5">
+            <div class="col-span-4 text-xs text-slate-500 font-medium">Type / Material</div>
+            <div class="col-span-4 text-xs text-slate-500 font-medium">Brand</div>
+            <div class="col-span-3 text-xs text-slate-500 font-medium">Grams (g)</div>
+            <div class="col-span-1"></div>
+          </div>
+          <div id="filamentRows" class="space-y-2"></div>
+        </div>
+
+        <!-- PRINTER CARD -->
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6">
+          <h2 class="text-sm font-semibold text-white flex items-center gap-2 mb-4">
+            <span class="w-7 h-7 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center text-sm">🖨️</span>
+            Printer &amp; Time
+          </h2>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs text-slate-400 mb-1.5 font-medium">Select Printer</label>
+              <select id="printerSelect" onchange="updatePrinterInfo()" class="input-field w-full rounded-lg px-3 py-2.5 text-sm">
+                <option value="">— Choose printer —</option>
+              </select>
+            </div>
+            <div id="printerStatsGrid" class="grid grid-cols-3 gap-2 hidden">
+              <div class="info-chip"><div class="text-xs text-slate-500 mb-0.5">Power</div><div id="printerWatts" class="text-sm font-bold text-indigo-400">—</div></div>
+              <div class="info-chip"><div class="text-xs text-slate-500 mb-0.5">Cost/hr</div><div id="printerCostDisplay" class="text-sm font-bold text-purple-400">—</div></div>
+              <div class="info-chip"><div class="text-xs text-slate-500 mb-0.5">Life Hours</div><div id="printerLifeHoursDisplay" class="text-sm font-semibold text-slate-300">—</div></div>
+              <div class="info-chip"><div class="text-xs text-slate-500 mb-0.5">Machine Cost</div><div id="printerMachineCostDisplay" class="text-sm font-semibold text-slate-300">—</div></div>
+              <div class="info-chip"><div class="text-xs text-slate-500 mb-0.5">Maintenance/yr</div><div id="printerMaintenanceDisplay" class="text-sm font-semibold text-slate-300">—</div></div>
+              <div class="info-chip"><div class="text-xs text-slate-500 mb-0.5">Payoff Time</div><div id="printerPayoffDisplay" class="text-sm font-semibold text-slate-300">—</div></div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Print Hours</label>
+                <input id="printHours" type="number" min="0" value="0" oninput="calculate()" class="input-field w-full rounded-lg px-3 py-2.5 text-sm"></div>
+              <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Print Minutes</label>
+                <input id="printMinutes" type="number" min="0" max="59" value="0" oninput="calculate()" class="input-field w-full rounded-lg px-3 py-2.5 text-sm"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-5">
+
+        <!-- HARDWARE CARD -->
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+              <span class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-sm">🔩</span>
+              Hardware
+            </h2>
+            <button onclick="openHardwareModal()" class="btn-primary text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Hardware
+            </button>
+          </div>
+          <div id="hardwareRows" class="space-y-2">
+            <div class="text-sm text-slate-500 text-center py-4">No hardware added yet</div>
+          </div>
+        </div>
+
+        <!-- JOB SETTINGS CARD -->
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6">
+          <h2 class="text-sm font-semibold text-white flex items-center gap-2 mb-4">
+            <span class="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm">⚡</span>
+            Job Settings
+          </h2>
+          <div class="space-y-3">
+            <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Items per Job</label>
+              <input id="itemsPerJob" type="number" min="1" value="1" oninput="calculate()" class="input-field w-full rounded-lg px-3 py-2.5 text-sm"></div>
+            <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Profit Margin %</label>
+              <input id="profitMargin" type="number" min="0" value="30" oninput="calculate()" class="input-field w-full rounded-lg px-3 py-2.5 text-sm"></div>
+            <div class="grid grid-cols-3 gap-2">
+              <div class="bg-slate-900 rounded-xl p-3 border border-slate-700">
+                <div class="text-xs text-slate-500 mb-0.5">Fil. Markup</div>
+                <div id="filamentMarkupDisplay" class="text-sm font-semibold text-emerald-400">—</div>
+              </div>
+              <div class="bg-slate-900 rounded-xl p-3 border border-slate-700">
+                <div class="text-xs text-slate-500 mb-0.5">Setup Fee</div>
+                <div id="setupFeeDisplay" class="text-sm font-semibold text-emerald-400">—</div>
+              </div>
+              <div class="bg-slate-900 rounded-xl p-3 border border-slate-700">
+                <div class="text-xs text-slate-500 mb-0.5">VAT</div>
+                <div id="vatDisplay" class="text-sm font-semibold text-emerald-400">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RESULTS -->
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6">
+        <h2 class="text-sm font-semibold text-white flex items-center gap-2 mb-5">
+          <span class="w-7 h-7 rounded-lg bg-green-500/20 text-green-400 flex items-center justify-center text-sm">💰</span>
+          Results
+        </h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-700">
+                <th class="text-left py-3 px-4 text-slate-400 font-medium">Component</th>
+                <th class="text-right py-3 px-4 text-slate-400 font-medium">Total (Whole Job)</th>
+                <th class="text-right py-3 px-4 text-slate-400 font-medium">Per Item</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody" class="divide-y divide-slate-700">
+              <tr><td colspan="3" class="text-center py-8 text-slate-500">Configure your job to see results</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ GLOBAL SETTINGS ═══ -->
+    <div id="view-settings" class="view max-w-2xl">
+      <div class="mb-7">
+        <h1 class="text-3xl font-bold text-white glow-text">Global Settings</h1>
+        <p class="text-slate-400 mt-1 text-sm">Defaults used across all calculations</p>
+      </div>
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 mb-5">
+        <h2 class="text-sm font-semibold text-white mb-5">Calculation Defaults</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">VAT %</label>
+            <input id="settingVat" type="number" min="0" step="0.1" class="input-field w-full rounded-lg px-3 py-2.5 text-sm"></div>
+          <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Power Cost (per kWh)</label>
+            <input id="settingPower" type="number" min="0" step="0.001" class="input-field w-full rounded-lg px-3 py-2.5 text-sm"></div>
+          <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Setup Fee</label>
+            <input id="settingSetup" type="number" min="0" step="0.01" class="input-field w-full rounded-lg px-3 py-2.5 text-sm"></div>
+          <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Default Filament Markup %</label>
+            <input id="settingFilamentMarkup" type="number" min="0" step="0.1" class="input-field w-full rounded-lg px-3 py-2.5 text-sm" placeholder="15"></div>
+          <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Default Filament Rows</label>
+            <input id="settingFilamentRows" type="number" min="1" max="30" class="input-field w-full rounded-lg px-3 py-2.5 text-sm"></div>
+          <div><label class="block text-xs text-slate-400 mb-1.5 font-medium">Currency Symbol</label>
+            <input id="settingCurrency" type="text" maxlength="5" class="input-field w-full rounded-lg px-3 py-2.5 text-sm" placeholder="kr"></div>
+        </div>
+        <button onclick="applySettings()" class="btn-primary text-white px-6 py-2.5 rounded-xl text-sm font-medium mt-5">Apply Settings</button>
+      </div>
+
+      <!-- MASS DELETE -->
+      <div class="bg-slate-800 border border-red-800/50 rounded-2xl p-6">
+        <h2 class="text-sm font-semibold text-red-400 mb-2 flex items-center gap-2">⚠️ Danger Zone</h2>
+        <p class="text-xs text-slate-400 mb-4">Permanently erase all printers, filaments, and hardware from this calculator. This cannot be undone — export your CSVs first.</p>
+        <button onclick="openPurgeModal()" class="btn-danger-soft text-white px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          Mass Delete All Data…
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ PRINTERS ═══ -->
+    <div id="view-printers" class="view">
+      <div class="mb-7 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 class="text-3xl font-bold text-white glow-text">Printers</h1>
+          <p class="text-slate-400 mt-1 text-sm">Cost/hr = (Machine Cost [+ Maintenance × Payoff Time]) ÷ Expected Life Hours</p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button onclick="exportCSV('printers')" class="csv-btn">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Export CSV
+          </button>
+          <label class="csv-btn csv-import">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12"/></svg>Import CSV
+            <input type="file" accept=".csv" class="hidden" onchange="importCSV('printers',this)">
+          </label>
+          <button onclick="openPrinterModal()" class="btn-primary text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Printer
+          </button>
+        </div>
+      </div>
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden overflow-x-auto">
+        <table class="w-full text-sm db-table min-w-max">
+          <thead><tr class="border-b border-slate-700">
+            <th class="text-left py-4 px-4 text-slate-400 font-medium">Name</th>
+            <th class="text-right py-4 px-4 text-slate-400 font-medium">Machine Cost</th>
+            <th class="text-right py-4 px-4 text-slate-400 font-medium">Life Hrs</th>
+            <th class="text-right py-4 px-4 text-slate-400 font-medium">Maint/yr</th>
+            <th class="text-right py-4 px-4 text-slate-400 font-medium">Payoff (yrs)</th>
+            <th class="text-right py-4 px-4 text-slate-400 font-medium">Watts</th>
+            <th class="text-right py-4 px-4 text-slate-400 font-medium">Cost/hr</th>
+            <th class="text-right py-4 px-4 text-slate-400 font-medium">Actions</th>
+          </tr></thead>
+          <tbody id="printersTable" class="divide-y divide-slate-700"></tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">Formula: (Machine Cost + Maintenance × Payoff Time) ÷ Expected Life Hours  —  or simply  Machine Cost ÷ Expected Life Hours when Payoff Time is blank</p>
+    </div>
+
+    <!-- ═══ FILAMENTS ═══ -->
+    <div id="view-filaments" class="view">
+      <div class="mb-7 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 class="text-3xl font-bold text-white glow-text">Filaments</h1>
+          <p class="text-slate-400 mt-1 text-sm">Price per gram scales with individual spool weight</p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button onclick="exportCSV('filaments')" class="csv-btn">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Export CSV
+          </button>
+          <label class="csv-btn csv-import">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12"/></svg>Import CSV
+            <input type="file" accept=".csv" class="hidden" onchange="importCSV('filaments',this)">
+          </label>
+          <button onclick="openFilamentModal()" class="btn-primary text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Filament
+          </button>
+        </div>
+      </div>
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+        <table class="w-full text-sm db-table">
+          <thead><tr class="border-b border-slate-700">
+            <th class="text-left py-4 px-5 text-slate-400 font-medium">Type / Material</th>
+            <th class="text-left py-4 px-5 text-slate-400 font-medium">Brand</th>
+            <th class="text-right py-4 px-5 text-slate-400 font-medium">Spool Price</th>
+            <th class="text-right py-4 px-5 text-slate-400 font-medium">Spool (g)</th>
+            <th class="text-right py-4 px-5 text-slate-400 font-medium">Price / g</th>
+            <th class="text-right py-4 px-5 text-slate-400 font-medium">Actions</th>
+          </tr></thead>
+          <tbody id="filamentsTable" class="divide-y divide-slate-700"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ═══ HARDWARE ═══ -->
+    <div id="view-hardware" class="view">
+      <div class="mb-7 flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 class="text-3xl font-bold text-white glow-text">Hardware</h1>
+          <p class="text-slate-400 mt-1 text-sm">Screws, magnets, and other per-item hardware</p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <button onclick="exportCSV('hardware')" class="csv-btn">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Export CSV
+          </button>
+          <label class="csv-btn csv-import">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12"/></svg>Import CSV
+            <input type="file" accept=".csv" class="hidden" onchange="importCSV('hardware',this)">
+          </label>
+          <button onclick="openHardwareDBModal()" class="btn-primary text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Hardware
+          </button>
+        </div>
+      </div>
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden">
+        <table class="w-full text-sm db-table">
+          <thead><tr class="border-b border-slate-700">
+            <th class="text-left py-4 px-5 text-slate-400 font-medium">Name</th>
+            <th class="text-right py-4 px-5 text-slate-400 font-medium">Price / Item</th>
+            <th class="text-right py-4 px-5 text-slate-400 font-medium">Actions</th>
+          </tr></thead>
+          <tbody id="hardwareTable" class="divide-y divide-slate-700"></tbody>
+        </table>
+      </div>
+    </div>
+
+    </div><!-- /max-w wrapper -->
+  </main>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="fixed bottom-6 right-6 bg-slate-700 border border-slate-500 text-white px-5 py-3 rounded-xl text-sm font-medium shadow-2xl transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-2">
+  <span id="toastIcon">✅</span><span id="toastMsg">Done</span>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────
+var hardwareJobRows = [];
+var selectedHardwareItem = null;
+var nextId = 100;
+function genId(){ return ++nextId; }
+
+// ─────────────────────────────────────────────────────
+// PRINTER LIFECYCLE FORMULA
+// Total Life Hours = dailyUsageHours * productionDaysPerYear * yearsToKeep
+// Hourly Cost = ((machineCost + partsCostPerYear*yearsToKeep) / totalLifeHours) * 1.10
+// ─────────────────────────────────────────────────────
+// Formula (with payoffTime):   Hourly Cost = (Machine Cost + Maintenance × Payoff Time) / Expected Life Hours
+// Formula (without payoffTime): Hourly Cost = Machine Cost / Expected Life Hours
+function calcPrinterHourlyCost(p){
+  var lh=p.expectedLifeHours||1; if(lh<=0)return 0;
+  var pt=p.payoffTime||0;
+  if(pt>0){
+    return (p.machineCost+(p.maintenance||0)*pt)/lh;
+  }
+  return p.machineCost/lh;
+}
+function calcPrinterLifeHours(p){
+  return p.expectedLifeHours||0;
+}
+
+// ─────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded',function(){
+  loadSettingsToForm();
+  renderPrinterSelect();
+  renderAllTables();
+  updateDisplayValues();
+  addDefaultFilamentRows();
+  updateVersionBadge();
+  // Wire printer modal live-preview
+  ['printerModalMachineCost','printerModalLifeHours',
+   'printerModalMaintenance','printerModalPayoffTime'].forEach(function(id){
+    document.getElementById(id).addEventListener('input',updatePrinterModalPreview);
+  });
+  // Wire purge confirm checkbox
+  document.getElementById('purgeConfirmCheck').addEventListener('change',function(){
+    document.getElementById('purgeExecuteBtn').disabled = !this.checked;
+  });
+});
+
+function updateVersionBadge(){ document.getElementById('versionBadge').textContent='v'+DB.version; }
+function addDefaultFilamentRows(){
+  var n=DB.settings.defaultFilamentRows||3;
+  for(var i=0;i<n;i++) addFilamentRow();
+}
+
+// ─────────────────────────────────────────────────────
+// NAVIGATION  — view IDs match nav IDs exactly
+// ─────────────────────────────────────────────────────
+var NAV_IDS = ['calculator','settings','printers','filaments','hardware'];
+function showView(name){
+  document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active');});
+  NAV_IDS.forEach(function(n){
+    var el=document.getElementById('nav-'+n);
+    if(!el)return;
+    el.classList.remove('active');
+    el.classList.add('text-slate-400','hover:text-white','hover:bg-slate-700');
+  });
+  document.getElementById('view-'+name).classList.add('active');
+  var nav=document.getElementById('nav-'+name);
+  nav.classList.add('active');
+  nav.classList.remove('text-slate-400','hover:text-white','hover:bg-slate-700');
+  if(name==='settings')    loadSettingsToForm();
+  if(name==='printers')    renderPrintersTable();
+  if(name==='filaments')   renderFilamentsTable();
+  if(name==='hardware')    renderHardwareTable();
+  if(name==='calculator')  { renderFilamentTypeDropdowns(); renderPrinterSelect(); }
+}
+
+// ─────────────────────────────────────────────────────
+// HELP MODAL
+// ─────────────────────────────────────────────────────
+function openHelp(){  document.getElementById('helpModal').classList.add('active'); }
+function closeHelp(){ document.getElementById('helpModal').classList.remove('active'); }
+
+// ─────────────────────────────────────────────────────
+// PURGE MODAL
+// ─────────────────────────────────────────────────────
+function openPurgeModal(){
+  document.getElementById('purgeCountPrinters').textContent  = DB.printers.length;
+  document.getElementById('purgeCountFilaments').textContent = DB.filaments.length;
+  document.getElementById('purgeCountHardware').textContent  = DB.hardware.length;
+  document.getElementById('purgeConfirmCheck').checked = false;
+  document.getElementById('purgeExecuteBtn').disabled = true;
+  document.getElementById('purgeModal').classList.add('active');
+}
+function closePurgeModal(){ document.getElementById('purgeModal').classList.remove('active'); }
+function executePurge(){
+  DB.printers=[]; DB.filaments=[]; DB.hardware=[];
+  closePurgeModal();
+  renderAllTables();
+  renderPrinterSelect();
+  renderFilamentTypeDropdowns();
+  showToast('All data deleted','🗑️');
+}
+
+// ─────────────────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────────────────
+function loadSettingsToForm(){
+  document.getElementById('settingVat').value            = DB.settings.vat;
+  document.getElementById('settingPower').value          = DB.settings.powerCost;
+  document.getElementById('settingSetup').value          = DB.settings.setupFee;
+  document.getElementById('settingFilamentMarkup').value = DB.settings.filamentMarkup!==undefined?DB.settings.filamentMarkup:15;
+  document.getElementById('settingFilamentRows').value   = DB.settings.defaultFilamentRows||3;
+  document.getElementById('settingCurrency').value       = DB.settings.currency;
+}
+function applySettings(){
+  DB.settings.vat                 = parseFloat(document.getElementById('settingVat').value)||0;
+  DB.settings.powerCost           = parseFloat(document.getElementById('settingPower').value)||0;
+  DB.settings.setupFee            = parseFloat(document.getElementById('settingSetup').value)||0;
+  DB.settings.filamentMarkup      = parseFloat(document.getElementById('settingFilamentMarkup').value)||0;
+  DB.settings.defaultFilamentRows = parseInt(document.getElementById('settingFilamentRows').value)||3;
+  DB.settings.currency            = document.getElementById('settingCurrency').value||'kr';
+  updateDisplayValues();
+  calculate();
+  showToast('Settings applied!','⚙️');
+}
+function updateDisplayValues(){
+  var c=DB.settings.currency;
+  document.getElementById('setupFeeDisplay').textContent = c+' '+DB.settings.setupFee.toFixed(2);
+  document.getElementById('vatDisplay').textContent      = DB.settings.vat+'%';
+  var fm=document.getElementById('filamentMarkupDisplay');
+  if(fm) fm.textContent=(DB.settings.filamentMarkup||0)+'%';
+}
+
+// ─────────────────────────────────────────────────────
+// FILAMENT ROWS  — Type first, then Brand (reversed cascade)
+// ─────────────────────────────────────────────────────
+function populateTypeDropdown(sel){
+  // Unique sorted list of all types in DB
+  var types=[];
+  DB.filaments.forEach(function(f){if(types.indexOf(f.type)===-1) types.push(f.type);});
+  types.sort();
+  var prev=sel.value;
+  sel.innerHTML='<option value="">— Type —</option>';
+  types.forEach(function(t){
+    var o=document.createElement('option');o.value=t;o.textContent=t;sel.appendChild(o);
+  });
+  if(prev) sel.value=prev;
+}
+
+function populateBrandDropdown(brandSel, selectedType){
+  var brands=[];
+  DB.filaments.forEach(function(f){
+    if(f.type===selectedType && brands.indexOf(f.brand)===-1) brands.push(f.brand);
+  });
+  brands.sort();
+  var prev=brandSel.value;
+  brandSel.innerHTML='<option value="">— Brand —</option>';
+  brands.forEach(function(b){
+    var o=document.createElement('option');o.value=b;o.textContent=b;brandSel.appendChild(o);
+  });
+  brandSel.disabled=(brands.length===0);
+  if(prev && brands.indexOf(prev)!==-1) brandSel.value=prev;
+}
+
+function onTypeChange(typeSel){
+  var row=typeSel.closest('.filament-row');
+  var brandSel=row.querySelector('.filament-brand');
+  populateBrandDropdown(brandSel, typeSel.value);
+  calculate();
+}
+
+// Refresh all type dropdowns (called after DB changes / nav to calculator)
+function renderFilamentTypeDropdowns(){
+  document.querySelectorAll('.filament-row').forEach(function(row){
+    var ts=row.querySelector('.filament-type');
+    var bs=row.querySelector('.filament-brand');
+    if(!ts||!bs) return;
+    populateTypeDropdown(ts);
+    populateBrandDropdown(bs, ts.value);
+  });
+}
+
+function addFilamentRow(){
+  if(document.querySelectorAll('.filament-row').length>=30){showToast('Max 30 rows','⚠️');return;}
+  var id='fr-'+genId();
+  var div=document.createElement('div');
+  div.className='filament-row grid grid-cols-12 gap-2 items-center';
+  div.id=id;
+  div.innerHTML=
+    '<div class="col-span-4"><select class="filament-type input-field w-full rounded-lg px-2 py-2 text-xs" onchange="onTypeChange(this)"><option value="">— Type —</option></select></div>'
+   +'<div class="col-span-4"><select class="filament-brand input-field w-full rounded-lg px-2 py-2 text-xs" onchange="calculate()" disabled><option value="">— Brand —</option></select></div>'
+   +'<div class="col-span-3"><input type="number" min="0" step="0.1" value="0" oninput="calculate()" class="filament-grams input-field w-full rounded-lg px-2 py-2 text-xs" placeholder="0"></div>'
+   +'<div class="col-span-1 flex justify-center"><button onclick="removeFilamentRow(\''+id+'\')" class="text-slate-500 hover:text-red-400 transition-colors text-lg leading-none">&times;</button></div>';
+  document.getElementById('filamentRows').appendChild(div);
+  populateTypeDropdown(div.querySelector('.filament-type'));
+  updateAddFilamentBtn();
+}
+
+function removeFilamentRow(id){
+  var el=document.getElementById(id); if(el)el.remove();
+  updateAddFilamentBtn(); calculate();
+}
+function updateAddFilamentBtn(){
+  document.getElementById('addFilamentBtn').disabled=document.querySelectorAll('.filament-row').length>=30;
+}
+
+// ─────────────────────────────────────────────────────
+// PRINTER SELECT
+// ─────────────────────────────────────────────────────
+function renderPrinterSelect(){
+  var sel=document.getElementById('printerSelect'), val=sel.value;
+  sel.innerHTML='<option value="">— Choose printer —</option>';
+  DB.printers.forEach(function(p){
+    var o=document.createElement('option');o.value=p.id;o.textContent=p.name;
+    if(p.id==val)o.selected=true; sel.appendChild(o);
+  });
+  updatePrinterInfo();
+}
+function updatePrinterInfo(){
+  var id=parseInt(document.getElementById('printerSelect').value);
+  var p=DB.printers.find(function(x){return x.id===id;});
+  var c=DB.settings.currency;
+  var grid=document.getElementById('printerStatsGrid');
+  if(p){
+    var hr=calcPrinterHourlyCost(p), lh=calcPrinterLifeHours(p);
+    document.getElementById('printerWatts').textContent              =p.powerConsumptionWatts+' W';
+    document.getElementById('printerCostDisplay').textContent        =c+' '+hr.toFixed(4)+'/hr';
+    document.getElementById('printerLifeHoursDisplay').textContent   =(p.expectedLifeHours||0).toLocaleString()+' h';
+    document.getElementById('printerMachineCostDisplay').textContent =c+' '+p.machineCost.toLocaleString();
+    document.getElementById('printerMaintenanceDisplay').textContent =c+' '+(p.maintenance||0).toLocaleString()+'/yr';
+    document.getElementById('printerPayoffDisplay').textContent      =(p.payoffTime>0)?p.payoffTime+' yr':'—';
+    grid.classList.remove('hidden');
+  } else { grid.classList.add('hidden'); }
+  calculate();
+}
+
+// ─────────────────────────────────────────────────────
+// HARDWARE MODAL (Calculator)
+// ─────────────────────────────────────────────────────
+function openHardwareModal(){
+  selectedHardwareItem=null;
+  document.getElementById('hardwareSearch').value='';
+  document.getElementById('hardwareQty').value=1;
+  populateHardwareModalList(DB.hardware);
+  document.getElementById('hardwareModal').classList.add('active');
+}
+function closeHardwareModal(){ document.getElementById('hardwareModal').classList.remove('active'); }
+function filterHardwareModal(){
+  var q=document.getElementById('hardwareSearch').value.toLowerCase();
+  populateHardwareModalList(DB.hardware.filter(function(h){return h.name.toLowerCase().includes(q);}));
+}
+function populateHardwareModalList(items){
+  var list=document.getElementById('hardwareModalList');
+  if(!items.length){list.innerHTML='<p class="text-sm text-slate-500 text-center py-2">No items found</p>';return;}
+  list.innerHTML='';
+  items.forEach(function(h){
+    var div=document.createElement('div');
+    div.className='flex items-center justify-between px-4 py-2.5 rounded-lg cursor-pointer transition-colors border '
+      +(selectedHardwareItem&&selectedHardwareItem.id===h.id?'bg-indigo-600/30 border-indigo-500/50':'hover:bg-slate-700 border-transparent');
+    div.innerHTML='<span class="text-sm font-medium text-white">'+h.name+'</span>'
+                 +'<span class="text-xs text-slate-400">'+DB.settings.currency+' '+h.pricePerItem.toFixed(3)+'/item</span>';
+    div.onclick=function(){selectedHardwareItem=h;populateHardwareModalList(items);};
+    list.appendChild(div);
+  });
+}
+function confirmHardware(){
+  if(!selectedHardwareItem){showToast('Select an item first','⚠️');return;}
+  var qty=parseInt(document.getElementById('hardwareQty').value)||1;
+  hardwareJobRows.push({id:selectedHardwareItem.id,name:selectedHardwareItem.name,price:selectedHardwareItem.pricePerItem,qty:qty});
+  closeHardwareModal(); renderHardwareJobRows(); calculate();
+}
+function renderHardwareJobRows(){
+  var c=document.getElementById('hardwareRows');
+  if(!hardwareJobRows.length){c.innerHTML='<div class="text-sm text-slate-500 text-center py-4">No hardware added yet</div>';return;}
+  c.innerHTML='';
+  hardwareJobRows.forEach(function(row,idx){
+    var div=document.createElement('div');
+    div.className='hardware-row flex items-center justify-between bg-slate-900 rounded-lg px-3 py-2.5 border border-slate-700';
+    div.innerHTML='<div class="flex items-center gap-3 flex-1 min-w-0">'
+      +'<span class="text-amber-400 text-lg">🔩</span>'
+      +'<div class="min-w-0"><div class="text-sm font-medium text-white truncate">'+row.name+'</div>'
+      +'<div class="text-xs text-slate-400">'+DB.settings.currency+' '+row.price.toFixed(3)+'/item</div></div></div>'
+      +'<div class="flex items-center gap-2 ml-3">'
+      +'<span class="text-xs text-slate-400">Qty:</span>'
+      +'<input type="number" min="1" value="'+row.qty+'" class="input-field w-14 rounded px-2 py-1 text-xs" oninput="updateHardwareQty('+idx+',this.value)">'
+      +'<button onclick="removeHardwareRow('+idx+')" class="text-slate-500 hover:text-red-400 transition-colors text-lg leading-none">&times;</button></div>';
+    c.appendChild(div);
+  });
+}
+function updateHardwareQty(idx,val){hardwareJobRows[idx].qty=parseInt(val)||1;calculate();}
+function removeHardwareRow(idx){hardwareJobRows.splice(idx,1);renderHardwareJobRows();calculate();}
+
+// ─────────────────────────────────────────────────────
+// CALCULATION ENGINE
+// ─────────────────────────────────────────────────────
+function calculate(){
+  var cur=DB.settings.currency, vat=DB.settings.vat/100;
+  var powerKwh=DB.settings.powerCost, setupFee=DB.settings.setupFee;
+  var items=Math.max(1,parseInt(document.getElementById('itemsPerJob').value)||1);
+  var profitPct=(parseFloat(document.getElementById('profitMargin').value)||0)/100;
+  var hours=(parseFloat(document.getElementById('printHours').value)||0)
+            +(parseFloat(document.getElementById('printMinutes').value)||0)/60;
+
+  // Printer
+  var pid=parseInt(document.getElementById('printerSelect').value);
+  var printer=DB.printers.find(function(p){return p.id===pid;});
+  var hrRate=printer?calcPrinterHourlyCost(printer):0;
+  var printerCost=hrRate*hours;
+  var powerCost=printer?hours*(printer.powerConsumptionWatts/1000)*powerKwh:0;
+
+  // Filament: Type first, Brand second
+  var gMarkup=(DB.settings.filamentMarkup||0)/100, filTotal=0;
+  document.querySelectorAll('.filament-row').forEach(function(row){
+    var type =row.querySelector('.filament-type').value;
+    var brand=row.querySelector('.filament-brand').value;
+    var grams=parseFloat(row.querySelector('.filament-grams').value)||0;
+    if(!type||!brand||grams<=0) return;
+    var fil=DB.filaments.find(function(f){return f.type===type&&f.brand===brand;});
+    if(fil){
+      var sw=(fil.weight&&fil.weight>0)?fil.weight:1000;
+      filTotal+=grams*(fil.price/sw)*(1+gMarkup);
+    }
+  });
+
+  // Hardware — no markup
+  var hwTotal=0;
+  hardwareJobRows.forEach(function(r){hwTotal+=r.price*r.qty*items;});
+
+  var cost=filTotal+printerCost+powerCost+setupFee+hwTotal;
+  var profitBase=filTotal+printerCost+powerCost+hwTotal;
+  var profit=profitBase*profitPct;
+  var saleEx=cost+profit, saleInc=saleEx*(1+vat);
+
+  var tbody=document.getElementById('resultsBody');
+  function rr(lbl,val,cls){
+    return '<tr class="'+(cls||'')+'"><td class="py-3 px-4 text-slate-300">'+lbl+'</td>'
+      +'<td class="py-3 px-4 text-right font-mono text-slate-200">'+cur+' '+val.toFixed(2)+'</td>'
+      +'<td class="py-3 px-4 text-right font-mono text-slate-400">'+cur+' '+(val/items).toFixed(2)+'</td></tr>';
+  }
+  var pLabel='🖨️ Printer Cost'+(printer?' <span class="text-xs text-slate-500 ml-1">('+cur+' '+hrRate.toFixed(4)+'/hr)</span>':'');
+  var h='';
+  h+=rr('🎨 Filament Cost',filTotal);
+  h+=rr(pLabel,printerCost);
+  h+=rr('⚡ Power Cost',powerCost);
+  h+=rr('🔩 Hardware Cost',hwTotal);
+  h+=rr('🛠️ Setup Fee <span class="text-xs text-slate-500 ml-1">(excl. profit base)</span>',setupFee,'border-b border-slate-700');
+  h+=rr('💹 Profit ('+Math.round(profitPct*100)+'%)',profit);
+  h+='<tr class="border-t-2 border-slate-600 bg-slate-900/60">'
+    +'<td class="py-3 px-4 font-semibold text-white">📦 Total Cost</td>'
+    +'<td class="py-3 px-4 text-right font-mono font-bold text-indigo-400">'+cur+' '+cost.toFixed(2)+'</td>'
+    +'<td class="py-3 px-4 text-right font-mono text-indigo-300">'+cur+' '+(cost/items).toFixed(2)+'</td></tr>';
+  h+='<tr class="bg-slate-900/30">'
+    +'<td class="py-3 px-4 font-semibold text-white">💰 Sale Price (ex VAT)</td>'
+    +'<td class="py-3 px-4 text-right font-mono font-bold text-purple-400">'+cur+' '+saleEx.toFixed(2)+'</td>'
+    +'<td class="py-3 px-4 text-right font-mono text-purple-300">'+cur+' '+(saleEx/items).toFixed(2)+'</td></tr>';
+  h+='<tr class="bg-gradient-to-r from-indigo-900/40 to-purple-900/40 border-t border-indigo-700/50">'
+    +'<td class="py-4 px-4 font-bold text-white text-base">🏷️ Sale Price (incl. VAT '+DB.settings.vat+'%)</td>'
+    +'<td class="py-4 px-4 text-right font-mono font-black text-green-400 text-lg">'+cur+' '+saleInc.toFixed(2)+'</td>'
+    +'<td class="py-4 px-4 text-right font-mono font-bold text-green-300">'+cur+' '+(saleInc/items).toFixed(2)+'</td></tr>';
+  tbody.innerHTML=h;
+}
+
+// ─────────────────────────────────────────────────────
+// CLEAR CALCULATOR
+// ─────────────────────────────────────────────────────
+function clearCalculator(){
+  document.getElementById('filamentRows').innerHTML='';
+  hardwareJobRows=[]; renderHardwareJobRows();
+  document.getElementById('printerSelect').value='';
+  document.getElementById('printHours').value=0;
+  document.getElementById('printMinutes').value=0;
+  document.getElementById('itemsPerJob').value=1;
+  document.getElementById('profitMargin').value=30;
+  document.getElementById('printerStatsGrid').classList.add('hidden');
+  addDefaultFilamentRows(); calculate();
+  showToast('Calculator cleared!','🔄');
+}
+
+// ─────────────────────────────────────────────────────
+// DB TABLE RENDERS
+// ─────────────────────────────────────────────────────
+function renderAllTables(){ renderPrintersTable(); renderFilamentsTable(); renderHardwareTable(); }
+
+function renderPrintersTable(){
+  var c=DB.settings.currency, tbody=document.getElementById('printersTable');
+  tbody.innerHTML='';
+  DB.printers.forEach(function(p){
+    var hr=calcPrinterHourlyCost(p), lh=calcPrinterLifeHours(p);
+    var tr=document.createElement('tr'); tr.className='transition-colors';
+    var payoffStr=(p.payoffTime>0)?p.payoffTime+' yr':'—';
+    tr.innerHTML='<td class="py-3.5 px-4 text-white font-medium">'+p.name+'</td>'
+      +'<td class="py-3.5 px-4 text-right text-slate-300">'+c+' '+p.machineCost.toLocaleString()+'</td>'
+      +'<td class="py-3.5 px-4 text-right text-slate-300">'+(p.expectedLifeHours||0).toLocaleString()+' h</td>'
+      +'<td class="py-3.5 px-4 text-right text-slate-300">'+c+' '+(p.maintenance||0).toLocaleString()+'</td>'
+      +'<td class="py-3.5 px-4 text-right text-slate-300">'+payoffStr+'</td>'
+      +'<td class="py-3.5 px-4 text-right text-slate-300">'+p.powerConsumptionWatts+' W</td>'
+      +'<td class="py-3.5 px-4 text-right font-semibold text-indigo-400">'+c+' '+hr.toFixed(4)+'</td>'
+      +'<td class="py-3.5 px-4 text-right"><div class="flex gap-2 justify-end">'
+      +'<button onclick="openPrinterModal('+p.id+')" class="text-xs bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/40 px-3 py-1.5 rounded-lg transition-colors">Edit</button>'
+      +'<button onclick="deletePrinter('+p.id+')" class="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/40 px-3 py-1.5 rounded-lg transition-colors">Delete</button>'
+      +'</div></td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function renderFilamentsTable(){
+  var c=DB.settings.currency, tbody=document.getElementById('filamentsTable');
+  tbody.innerHTML='';
+  DB.filaments.forEach(function(f){
+    var sw=(f.weight&&f.weight>0)?f.weight:1000;
+    var tr=document.createElement('tr'); tr.className='transition-colors';
+    tr.innerHTML='<td class="py-3.5 px-5 text-white font-medium">'+f.type+'</td>'
+      +'<td class="py-3.5 px-5 text-slate-300">'+f.brand+'</td>'
+      +'<td class="py-3.5 px-5 text-right text-slate-300">'+c+' '+f.price.toFixed(2)+'</td>'
+      +'<td class="py-3.5 px-5 text-right text-slate-300">'+sw+' g</td>'
+      +'<td class="py-3.5 px-5 text-right text-slate-300">'+c+' '+(f.price/sw).toFixed(4)+'</td>'
+      +'<td class="py-3.5 px-5 text-right"><div class="flex gap-2 justify-end">'
+      +'<button onclick="openFilamentModal('+f.id+')" class="text-xs bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/40 px-3 py-1.5 rounded-lg transition-colors">Edit</button>'
+      +'<button onclick="deleteFilament('+f.id+')" class="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/40 px-3 py-1.5 rounded-lg transition-colors">Delete</button>'
+      +'</div></td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function renderHardwareTable(){
+  var c=DB.settings.currency, tbody=document.getElementById('hardwareTable');
+  tbody.innerHTML='';
+  DB.hardware.forEach(function(h){
+    var tr=document.createElement('tr'); tr.className='transition-colors';
+    tr.innerHTML='<td class="py-3.5 px-5 text-white font-medium">'+h.name+'</td>'
+      +'<td class="py-3.5 px-5 text-right text-slate-300">'+c+' '+h.pricePerItem.toFixed(3)+'</td>'
+      +'<td class="py-3.5 px-5 text-right"><div class="flex gap-2 justify-end">'
+      +'<button onclick="openHardwareDBModal('+h.id+')" class="text-xs bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/40 px-3 py-1.5 rounded-lg transition-colors">Edit</button>'
+      +'<button onclick="deleteHardware('+h.id+')" class="text-xs bg-red-500/20 text-red-400 hover:bg-red-500/40 px-3 py-1.5 rounded-lg transition-colors">Delete</button>'
+      +'</div></td>';
+    tbody.appendChild(tr);
+  });
+}
+
+// ─────────────────────────────────────────────────────
+// PRINTER MODAL
+// ─────────────────────────────────────────────────────
+function openPrinterModal(id){
+  document.getElementById('printerModalId').value=id||'';
+  var fields=['printerModalName','printerModalMachineCost','printerModalLifeHours',
+              'printerModalMaintenance','printerModalWatts','printerModalPayoffTime'];
+  if(id){
+    var p=DB.printers.find(function(x){return x.id===id;});
+    document.getElementById('printerModalTitle').textContent='Edit Printer';
+    document.getElementById('printerModalName').value          =p.name;
+    document.getElementById('printerModalMachineCost').value   =p.machineCost;
+    document.getElementById('printerModalLifeHours').value     =p.expectedLifeHours||6300;
+    document.getElementById('printerModalMaintenance').value   =p.maintenance||0;
+    document.getElementById('printerModalWatts').value         =p.powerConsumptionWatts;
+    // payoffTime is optional — show blank if 0/undefined
+    document.getElementById('printerModalPayoffTime').value    =(p.payoffTime>0)?p.payoffTime:'';
+  } else {
+    document.getElementById('printerModalTitle').textContent='Add Printer';
+    fields.forEach(function(f){document.getElementById(f).value='';});
+  }
+  updatePrinterModalPreview();
+  document.getElementById('printerModal').classList.add('active');
+}
+function updatePrinterModalPreview(){
+  var mc=parseFloat(document.getElementById('printerModalMachineCost').value)||0;
+  var lh=parseFloat(document.getElementById('printerModalLifeHours').value)||0;
+  var mt=parseFloat(document.getElementById('printerModalMaintenance').value)||0;
+  var pt=parseFloat(document.getElementById('printerModalPayoffTime').value);
+  var el=document.getElementById('printerModalCalcCost');
+  if(lh>0){
+    var rate;
+    if(!isNaN(pt)&&pt>0){
+      rate=(mc+mt*pt)/lh;
+      el.textContent=DB.settings.currency+' '+rate.toFixed(4)+'/hr  (with payoff '+pt+' yr)';
+    } else {
+      rate=mc/lh;
+      el.textContent=DB.settings.currency+' '+rate.toFixed(4)+'/hr  (no payoff)';
+    }
+  } else el.textContent='—';
+}
+function closePrinterModal(){ document.getElementById('printerModal').classList.remove('active'); }
+function savePrinterModal(){
+  var name=document.getElementById('printerModalName').value.trim();
+  var mc=parseFloat(document.getElementById('printerModalMachineCost').value);
+  var lh=parseFloat(document.getElementById('printerModalLifeHours').value);
+  var mt=parseFloat(document.getElementById('printerModalMaintenance').value)||0;
+  var w =parseFloat(document.getElementById('printerModalWatts').value);
+  var ptRaw=document.getElementById('printerModalPayoffTime').value.trim();
+  var pt=ptRaw===''?0:parseFloat(ptRaw);
+  if(!name||isNaN(mc)||isNaN(lh)||isNaN(w)){showToast('Fill all required fields','⚠️');return;}
+  if(lh<=0){showToast('Expected Life Time must be > 0','⚠️');return;}
+  if(ptRaw!==''&&(isNaN(pt)||pt<0)){showToast('Payoff Time must be a positive number (or leave blank)','⚠️');return;}
+  var eid=parseInt(document.getElementById('printerModalId').value);
+  if(eid){
+    var p=DB.printers.find(function(x){return x.id===eid;});
+    p.name=name;p.machineCost=mc;p.expectedLifeHours=lh;
+    p.maintenance=mt;p.powerConsumptionWatts=w;p.payoffTime=pt;
+  } else {
+    DB.printers.push({id:genId(),name:name,machineCost:mc,expectedLifeHours:lh,
+      maintenance:mt,powerConsumptionWatts:w,payoffTime:pt});
+  }
+  closePrinterModal(); renderPrintersTable(); renderPrinterSelect();
+  showToast(eid?'Printer updated!':'Printer added!','🖨️');
+}
+function deletePrinter(id){
+  if(!confirm('Delete this printer?'))return;
+  DB.printers=DB.printers.filter(function(p){return p.id!==id;});
+  renderPrintersTable(); renderPrinterSelect(); showToast('Printer deleted','🗑️');
+}
+
+// ─────────────────────────────────────────────────────
+// FILAMENT MODAL
+// ─────────────────────────────────────────────────────
+function openFilamentModal(id){
+  document.getElementById('filamentModalId').value=id||'';
+  if(id){
+    var f=DB.filaments.find(function(x){return x.id===id;});
+    document.getElementById('filamentModalTitle').textContent='Edit Filament';
+    document.getElementById('filamentModalType').value  =f.type;
+    document.getElementById('filamentModalBrand').value =f.brand;
+    document.getElementById('filamentModalPrice').value =f.price;
+    document.getElementById('filamentModalWeight').value=f.weight||1000;
+  } else {
+    document.getElementById('filamentModalTitle').textContent='Add Filament';
+    ['filamentModalType','filamentModalBrand','filamentModalPrice','filamentModalWeight']
+      .forEach(function(i){document.getElementById(i).value='';});
+  }
+  document.getElementById('filamentModal').classList.add('active');
+}
+function closeFilamentModal(){ document.getElementById('filamentModal').classList.remove('active'); }
+function saveFilamentModal(){
+  var type  =document.getElementById('filamentModalType').value.trim();
+  var brand =document.getElementById('filamentModalBrand').value.trim();
+  var price =parseFloat(document.getElementById('filamentModalPrice').value);
+  var weight=parseFloat(document.getElementById('filamentModalWeight').value);
+  if(!type||!brand||isNaN(price)||isNaN(weight)||weight<=0){showToast('Fill all fields (weight > 0)','⚠️');return;}
+  var eid=parseInt(document.getElementById('filamentModalId').value);
+  if(eid){
+    var f=DB.filaments.find(function(x){return x.id===eid;});
+    f.type=type;f.brand=brand;f.price=price;f.weight=weight;
+  } else {
+    if(DB.filaments.find(function(x){return x.type===type&&x.brand===brand;})){showToast('Type + Brand already exists','⚠️');return;}
+    DB.filaments.push({id:genId(),type:type,brand:brand,price:price,weight:weight});
+  }
+  closeFilamentModal(); renderFilamentsTable(); renderFilamentTypeDropdowns();
+  showToast(eid?'Filament updated!':'Filament added!','🎨');
+}
+function deleteFilament(id){
+  if(!confirm('Delete this filament?'))return;
+  DB.filaments=DB.filaments.filter(function(f){return f.id!==id;});
+  renderFilamentsTable(); renderFilamentTypeDropdowns(); showToast('Filament deleted','🗑️');
+}
+
+// ─────────────────────────────────────────────────────
+// HARDWARE DB MODAL
+// ─────────────────────────────────────────────────────
+function openHardwareDBModal(id){
+  document.getElementById('hwDBModalId').value=id||'';
+  if(id){
+    var h=DB.hardware.find(function(x){return x.id===id;});
+    document.getElementById('hardwareDBModalTitle').textContent='Edit Hardware';
+    document.getElementById('hwDBModalName').value =h.name;
+    document.getElementById('hwDBModalPrice').value=h.pricePerItem;
+  } else {
+    document.getElementById('hardwareDBModalTitle').textContent='Add Hardware';
+    document.getElementById('hwDBModalName').value ='';
+    document.getElementById('hwDBModalPrice').value='';
+  }
+  document.getElementById('hardwareDBModal').classList.add('active');
+}
+function closeHardwareDBModal(){ document.getElementById('hardwareDBModal').classList.remove('active'); }
+function saveHardwareDBModal(){
+  var name =document.getElementById('hwDBModalName').value.trim();
+  var price=parseFloat(document.getElementById('hwDBModalPrice').value);
+  if(!name||isNaN(price)){showToast('Fill all fields','⚠️');return;}
+  var eid=parseInt(document.getElementById('hwDBModalId').value);
+  if(eid){
+    var h=DB.hardware.find(function(x){return x.id===eid;});
+    h.name=name;h.pricePerItem=price;
+  } else {
+    DB.hardware.push({id:genId(),name:name,pricePerItem:price});
+  }
+  closeHardwareDBModal(); renderHardwareTable();
+  showToast(eid?'Hardware updated!':'Hardware added!','🔩');
+}
+function deleteHardware(id){
+  if(!confirm('Delete this hardware item?'))return;
+  DB.hardware=DB.hardware.filter(function(h){return h.id!==id;});
+  renderHardwareTable(); showToast('Hardware deleted','🗑️');
+}
+
+// ─────────────────────────────────────────────────────
+// CSV EXPORT
+// Filaments : Type,Brand,Price,Weight
+// Printers  : Name,MachineCost,MachinePartsCostPerYear,YearsToKeep,PowerConsumptionWatts,DailyUsageHours,ProductionDaysPerYear
+// Hardware  : Name,PricePerItem
+// ─────────────────────────────────────────────────────
+function csvEsc(v){
+  v=String(v);
+  return(v.includes(',')||v.includes('"')||v.includes('\n'))?'"'+v.replace(/"/g,'""')+'"':v;
+}
+function exportCSV(db){
+  var rows,fn;
+  if(db==='filaments'){
+    rows=[['Type','Brand','Price','Weight']];
+    DB.filaments.forEach(function(f){rows.push([csvEsc(f.type),csvEsc(f.brand),f.price,f.weight||1000]);});
+    fn='filaments.csv';
+  } else if(db==='printers'){
+    rows=[['Name','MachineCost','ExpectedLifeHours','Maintenance','PayoffTime','PowerConsumptionWatts']];
+    DB.printers.forEach(function(p){
+      rows.push([csvEsc(p.name),p.machineCost,p.expectedLifeHours||0,
+                 p.maintenance||0,p.payoffTime||0,p.powerConsumptionWatts]);
+    });
+    fn='printers.csv';
+  } else {
+    rows=[['Name','PricePerItem']];
+    DB.hardware.forEach(function(h){rows.push([csvEsc(h.name),h.pricePerItem]);});
+    fn='hardware.csv';
+  }
+  var csv=rows.map(function(r){return r.join(',');}).join('\n');
+  var blob=new Blob([csv],{type:'text/csv'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download=fn;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Exported '+fn,'📤');
+}
+
+// ─────────────────────────────────────────────────────
+// CSV IMPORT — header-driven, case-insensitive, upsert
+// ─────────────────────────────────────────────────────
+function parseCSVRow(line){
+  var cols=[],cur='',inQ=false;
+  for(var i=0;i<line.length;i++){
+    var ch=line[i];
+    if(ch==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}
+    else if(ch===','&&!inQ){cols.push(cur);cur='';}
+    else cur+=ch;
+  }
+  cols.push(cur);return cols;
+}
+function importCSV(db,el){
+  var file=el.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var lines=e.target.result.split(/\r?\n/).filter(function(l){return l.trim();});
+    if(lines.length<2){showToast('CSV empty or missing data rows','⚠️');el.value='';return;}
+    var hdrs=parseCSVRow(lines[0]).map(function(h){return h.trim().toLowerCase();});
+    var added=0,updated=0,skipped=0;
+
+    if(db==='filaments'){
+      var iT=hdrs.indexOf('type'),iB=hdrs.indexOf('brand'),iP=hdrs.indexOf('price'),iW=hdrs.indexOf('weight');
+      if(iT===-1||iB===-1||iP===-1){showToast('Filaments CSV needs: Type,Brand,Price','⚠️');el.value='';return;}
+      for(var i=1;i<lines.length;i++){
+        var c=parseCSVRow(lines[i]);
+        var type=(c[iT]||'').trim(),brand=(c[iB]||'').trim();
+        var price=parseFloat(c[iP]),weight=iW!==-1?parseFloat(c[iW]):1000;
+        if(!type||!brand||isNaN(price)){skipped++;continue;}
+        if(isNaN(weight)||weight<=0)weight=1000;
+        var ex=DB.filaments.find(function(f){return f.type===type&&f.brand===brand;});
+        if(ex){ex.price=price;ex.weight=weight;updated++;}
+        else{DB.filaments.push({id:genId(),type:type,brand:brand,price:price,weight:weight});added++;}
+      }
+      renderFilamentsTable();renderFilamentTypeDropdowns();
+
+    } else if(db==='printers'){
+      var iN=hdrs.indexOf('name'),iMC=hdrs.indexOf('machinecost');
+      var iLH=hdrs.indexOf('expectedlifehours'),iMT=hdrs.indexOf('maintenance');
+      var iPT=hdrs.indexOf('payofftime'),iW2=hdrs.indexOf('powerconsumptionwatts');
+      if(iN===-1||iMC===-1||iLH===-1||iW2===-1){showToast('Printers CSV needs: Name, MachineCost, ExpectedLifeHours, PowerConsumptionWatts','⚠️');el.value='';return;}
+      for(var i=1;i<lines.length;i++){
+        var c=parseCSVRow(lines[i]);
+        var name=(c[iN]||'').trim();
+        var mc=parseFloat(c[iMC]),lh2=parseFloat(c[iLH]),w=parseFloat(c[iW2]);
+        var mt=iMT!==-1?parseFloat(c[iMT]):0;
+        var ptv=iPT!==-1?parseFloat(c[iPT]):0;
+        if(!name||isNaN(mc)||isNaN(lh2)||isNaN(w)){skipped++;continue;}
+        if(isNaN(mt)||mt<0)mt=0;
+        if(isNaN(ptv)||ptv<0)ptv=0;
+        var ex=DB.printers.find(function(p){return p.name.toLowerCase()===name.toLowerCase();});
+        if(ex){ex.machineCost=mc;ex.expectedLifeHours=lh2;ex.maintenance=mt;
+               ex.payoffTime=ptv;ex.powerConsumptionWatts=w;updated++;}
+        else{DB.printers.push({id:genId(),name:name,machineCost:mc,expectedLifeHours:lh2,
+          maintenance:mt,payoffTime:ptv,powerConsumptionWatts:w});added++;}
+      }
+      renderPrintersTable();renderPrinterSelect();
+
+    } else {
+      var iN2=hdrs.indexOf('name'),iP2=hdrs.indexOf('priceperitem');
+      if(iN2===-1||iP2===-1){showToast('Hardware CSV needs: Name,PricePerItem','⚠️');el.value='';return;}
+      for(var i=1;i<lines.length;i++){
+        var c=parseCSVRow(lines[i]);
+        var name=(c[iN2]||'').trim(),price=parseFloat(c[iP2]);
+        if(!name||isNaN(price)){skipped++;continue;}
+        var ex=DB.hardware.find(function(h){return h.name.toLowerCase()===name.toLowerCase();});
+        if(ex){ex.pricePerItem=price;updated++;}else{DB.hardware.push({id:genId(),name:name,pricePerItem:price});added++;}
+      }
+      renderHardwareTable();
+    }
+    el.value='';
+    showToast('Imported: +'+added+' added, '+updated+' updated'+(skipped?' ('+skipped+' skipped)':''),'📥');
+  };
+  reader.readAsText(file);
+}
+
+// ─────────────────────────────────────────────────────
+// TOAST
+// ─────────────────────────────────────────────────────
+function showToast(msg,icon){
+  var t=document.getElementById('toast');
+  document.getElementById('toastMsg').textContent=msg;
+  document.getElementById('toastIcon').textContent=icon||'✅';
+  t.classList.remove('translate-y-20','opacity-0');
+  t.classList.add('translate-y-0','opacity-100');
+  setTimeout(function(){t.classList.add('translate-y-20','opacity-0');t.classList.remove('translate-y-0','opacity-100');},3000);
+}
+
+// ─────────────────────────────────────────────────────
+// SELF-REPLICATING SAVE (no edit log)
+// ─────────────────────────────────────────────────────
+function saveFile(){
+  // Sync settings fields if visible
+  var el=document.getElementById('settingVat');
+  if(el&&el.value!==''){
+    DB.settings.vat            =parseFloat(el.value)||DB.settings.vat;
+    DB.settings.powerCost      =parseFloat(document.getElementById('settingPower').value)||DB.settings.powerCost;
+    DB.settings.setupFee       =parseFloat(document.getElementById('settingSetup').value)||DB.settings.setupFee;
+    DB.settings.filamentMarkup =parseFloat(document.getElementById('settingFilamentMarkup').value)||DB.settings.filamentMarkup;
+    DB.settings.defaultFilamentRows=parseInt(document.getElementById('settingFilamentRows').value)||DB.settings.defaultFilamentRows;
+    DB.settings.currency       =document.getElementById('settingCurrency').value||DB.settings.currency;
+  }
+  var newVer=DB.version+1; DB.version=newVer;
+
+  var newBlock='// ============================================================\n'
+    +'// DATABASE BLOCK — Edit freely\n'
+    +'// ============================================================\n'
+    +'var DB = '+JSON.stringify(DB,null,2)+';\n'
+    +'// ============================================================\n'
+    +'// END DATABASE BLOCK\n'
+    +'// ============================================================\n';
+
+  var html=document.documentElement.outerHTML;
+  var tag='<script id="db-script">',endTag='<\/script>';
+  var si=html.indexOf(tag),ei=html.indexOf(endTag,si);
+  if(si===-1||ei===-1){showToast('Save error: DB block not found','❌');return;}
+  var newHtml=html.substring(0,si+tag.length)+'\n'+newBlock+html.substring(ei);
+  var blob=new Blob([newHtml],{type:'text/html'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download='calculator_v'+newVer+'.html';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  updateVersionBadge();
+  showToast('Saved as calculator_v'+newVer+'.html','💾');
+}
+
+// ─────────────────────────────────────────────────────
+// MODAL CLOSE — Escape key only
+// Clicking the background overlay does NOT close modals
+// (prevents accidental data loss). Use Cancel/Close buttons.
+// ─────────────────────────────────────────────────────
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape') document.querySelectorAll('.modal-overlay.active').forEach(function(m){m.classList.remove('active');});
+});
+</script>
+</body>
+</html>
